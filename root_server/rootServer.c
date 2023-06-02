@@ -1,0 +1,140 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <time.h>
+// #include <ip_port.h>
+#define CLIENT_PORT 53
+#define CLIENT_IP "127.0.0.1"
+#define LOCAL_SERVER_PORT 53
+#define LOCAL_SERVER_IP "127.0.0.2"
+#define ROOT_SERVER_PORT 53
+#define LOCAL_SERVER_PORT_TEMP 8080
+#define ROOT_SERVER_IP "127.0.0.3"
+#define TLD_SERVER_PORT 53
+#define TLD_SERVER_IP "127.0.0.4"
+
+#define BufferSize 512
+#define BACKLOG 10//最大同时请求连接数
+
+static void DNS_Parse_Name(unsigned char *spoint, char *out, int *len){
+    int flag = 0, n = 0, alen = 0;
+    //pos指向的内存用于储存解析得到的结果
+    char *pos = out + (*len);//传入的 *len = 0
+
+    //开始解析name的报文
+    while(1){
+        flag = (int)spoint[0];
+        if(flag == 0){
+            break;
+        }
+        else{
+            spoint++;
+            memcpy(pos, spoint, flag);
+            pos += flag;
+            spoint += flag;
+
+            *len += flag;
+            if((int)spoint[0] != 0){
+                memcpy(pos, ".", 1);
+                pos += 1;
+                (*len) += 1;
+            }
+        }
+    }
+}
+
+//判断.com .org .cn .us 并返回对应服务器IP
+
+
+//建立和local server 的TCP连接
+int main(){
+    int tcpsock;
+    struct sockaddr_in root_server_addr, local_server_addr;
+    char recvBuffer[BufferSize];
+    char sendBuffer[BufferSize];
+    int lsa_len = sizeof(local_server_addr);
+
+    bzero(&root_server_addr, sizeof(root_server_addr));
+    root_server_addr.sin_family = AF_INET;
+    root_server_addr.sin_port = htons(ROOT_SERVER_PORT);
+    root_server_addr.sin_addr.s_addr = inet_addr(ROOT_SERVER_IP);
+    bzero(&local_server_addr, sizeof(local_server_addr));
+    local_server_addr.sin_family = AF_INET;
+    local_server_addr.sin_port = htons(LOCAL_SERVER_PORT_TEMP);
+    local_server_addr.sin_addr.s_addr = inet_addr(LOCAL_SERVER_IP);
+
+    tcpsock = socket(AF_INET, SOCK_STREAM, 0);
+    if(tcpsock < 0){
+        perror("root TCP socket创建出错\n");
+        exit(-1);
+    }
+
+    if(bind(tcpsock, (struct sockaddr *)&root_server_addr), sizeof(root_server_addr) < 0){
+        perror("root TCP bind出错\n");
+        exit(-1);
+    }
+
+    if(listen(tcpsock, BACKLOG) < 0){
+        perror("root TCP listen出错\n");
+        exit(-1);
+    }
+    printf("root server is listening...\n");
+
+    if(accept(tcpsock, (struct sockaddr *)&local_server_addr, &lsa_len) < 0){
+        perror("root TCP accept出错\n");
+        exit(-1);
+    }
+
+    if(recv(tcpsock, recvBuffer, sizeof(recvBuffer), 0) < 0){
+        perror("local TCP recv 出错\n");
+        exit(-1);
+    }
+
+    //解析顶级域名
+    char *recvBufferPointer = recvBuffer;
+    char name[512];
+    char *apart[20]
+    char *rootName;
+    int d_len = 0;
+
+    //截取domain，跳过Header
+    recvBufferPointer += 12;
+    DNS_Parse_Name(&name, recvBufferPointer, &d_len);
+
+    apart[0] = strtok(name, ".");
+    //截取顶级域名
+    for(int t = 1; t<10; t++){
+        apart[t] = strtok(NULL, ".");
+        if(apart[t] == NULL){
+            rootName = strtok(apart[t-1], " ");
+        }
+    }
+
+    //加入判断，决定返回的IP地址
+    if(strcmp(rootName, "com") == 0){
+        //返回com的TLD服务器IP
+    }
+
+    if(strcmp(rootName, "org" == 0){
+        //返回org的TLD服务器IP
+    })
+
+    if(strcmp(rootName, "cn") == 0){
+        //返回cn的TLD服务器IP
+    }
+
+    if(strcmp(rootName, "us") == 0){
+        //返回us的TLD服务器IP
+    }
+
+    if(send(tcpsock, sendBuffer, strlen(sendBuffer), 0) < 0){
+        perror("local TCP send 出错\n");
+        exit(-1);
+    }
+}

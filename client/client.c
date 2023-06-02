@@ -97,7 +97,7 @@ int DNS_Create_Query(struct DNS_Query *query, const char *type, const char *host
     query -> qclass = htons(0x0001);
 
     //名字储存！！
-    //www.baidu.com.3www5baidu3com 
+    //www.baidu.com -> 3www5baidu3com 
     const char apart[2] = ".";
     char *qname = query -> name;//用于填充内容的指针
 

@@ -94,25 +94,25 @@ int cacheSearch(char *path, struct Translate *request){
     } 
 }
 
-static void DNS_Parse_Name(unsigned char *sendtoBufferPointer, char *out, int *len){
+static void DNS_Parse_Name(unsigned char *spoint, char *out, int *len){
     int flag = 0, n = 0, alen = 0;
     //pos指向的内存用于储存解析得到的结果
     char *pos = out + (*len);//传入的 *len = 0
 
     //开始解析name的报文
     while(1){
-        flag = (int)sendtoBufferPointer[0];
+        flag = (int)spoint[0];
         if(flag == 0){
             break;
         }
         else{
-            sendtoBufferPointer++;
-            memcpy(pos, sendtoBufferPointer, flag);
+            spoint++;
+            memcpy(pos, spoint, flag);
             pos += flag;
-            sendtoBufferPointer += flag;
+            spoint += flag;
 
             *len += flag;
-            if((int)sendtoBufferPointer[0] != 0){
+            if((int)spoint[0] != 0){
                 memcpy(pos, ".", 1);
                 pos += 1;
                 (*len) += 1;
@@ -141,6 +141,7 @@ int main(){
     char sendtoBuffer[BufferSize];
     char recvfromBuffer[BufferSize];
     char *sendtoBufferPointer = sendtoBuffer;
+    char *recvfromBufferPointer = recvfromBuffer;
     //初始化buffer
     memset(sendtoBuffer, 0, BufferSize);
     memset(recvfromBuffer, 0, BufferSize);
@@ -172,11 +173,11 @@ int main(){
     int r_len = 0;
     //Header部分定长为24字节,跳过即可
     //request[12]开始是query name 的第一个数字
-    sendtoBufferPointer += 12;
-    DNS_Parse_Name(sendtoBufferPointer, request.domain, &r_len);
-    sendtoBufferPointer += (r_len + 2);
-    request.qtype = ntohs(*(unsigned short *)sendtoBufferPointer);
-    sendtoBufferPointer += 2;
+    recvfromBufferPointer += 12;
+    DNS_Parse_Name(request.domain, recvfromBufferPointer, &r_len);
+    recvfromBufferPointer += (r_len + 2);
+    request.qtype = ntohs(*(unsigned short *)recvfromBufferPointer);
+    recvfromBufferPointer += 2;
     r_len += 2;
     if(cacheSearch("E:\\Desktop\\demo.txt\n", &request) < 0){
         memcpy(sendtoBufferPointer, &request, r_len);
@@ -220,7 +221,8 @@ int main(){
         exit(-1);
     }
 
-    memcpy(sendBufferPointer, &request, r_len);
+    //给sendBuffer赋值
+    memcpy(sendBufferPointer, recvfromBufferPointer, BufferSize);
 
      //传输信息
     if(send(tcpsock, sendBuffer, strlen(sendBuffer), 0) < 0){
