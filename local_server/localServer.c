@@ -8,12 +8,23 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <time.h>
-#include <ip_port.h>
 
+// #include <ip_port.h>
+#define CLIENT_PORT 53
+#define CLIENT_IP "127.0.0.1"
+#define LOCAL_SERVER_PORT 53
+#define LOCAL_SERVER_IP "127.0.0.2"
+#define ROOT_SERVER_PORT 53
+#define LOCAL_SERVER_PORT_TEMP 8080
+#define ROOT_SERVER_IP "127.0.0.3"
+#define TLD_SERVER_PORT 53
+#define TLD_SERVER_IP "127.0.0.4"
 
-#define BACKLOG 10;//最大同时请求连接数
-#define AMOUNT 1500;
-#define BufferSize 512;
+#define AMOUNT 1500
+#define BufferSize 512
+#define TYPE_A        0X01
+#define TYPE_CNMAE    0X05
+#define TYPE_MX       0x0f
 
 struct DNS_Header{
     unsigned short id;
@@ -25,15 +36,9 @@ struct DNS_Header{
 };
 
 struct Translate{
-    char *ip[20];
+    char domain[206];
     unsigned short qtype;
 };
-
-struct IDchange{
-    unsigned short oldID;//原有ID
-    bool done;           //标记是否完成解析
-    sockaddr_in client;  //请求者套接字地址
-}
 
 //当authority的数量为0表示结束
 int isEnd(struct DNS_Header *header){
@@ -43,10 +48,16 @@ int isEnd(struct DNS_Header *header){
 
 //加载本地txt文件
 int cacheSearch(char *path, struct Translate *request){
-    struct Translate DNSTable[AMOUNT];
     int i = 0, j = 0;
     int num = 0;
     char *temp[AMOUNT];//char型指针1500数组
+    char *type;
+
+    //将qtype转化为字母进行比对
+    if(request -> qtype == htons(TYPE_A)) {type = "A";}
+    if(request -> qtype == htons(TYPE_MX)) {type = "MX";}
+    if(request -> qtype == htons(TYPE_CNMAE)) {type = "CNAME";}
+
     FILE *fp = fopen(path, "ab+");//ab+ ：打开一个二进制文件，允许读或在文件末追加数据
     if(!fp){
         printf("Open file failed\n");
@@ -67,14 +78,12 @@ int cacheSearch(char *path, struct Translate *request){
     if(i == AMOUNT - 1) printf("The DNS record memory is full.\n");
 
     //把temp[i]切割成 IP 和 domain
-    for(j < i; j++){
-        char *cacheType = strtok(temp[j], ",");
+    for(j < i; j++;){
         char *cacheDomain = strtok(temp[j],",");
-        DNSTable -> qtype = cacheType;
-        DNSTable -> domain = cacheDomain;
+        char *cacheType = strtok(NULL, ",");
         //如果域名匹对成功，就将对应的type读入
-        if(strcmp(DNSTable -> domain, request -> domain) == 0){
-            if(strcmp(DNSTable -> qtype, request -> qtype) == 0)
+        if(strcmp(cacheDomain, request -> domain) == 0){
+            if(strcmp(cacheType, type) == 0)
             printf("same request exsit in cache\n");
             return 0;
         }
@@ -120,7 +129,7 @@ int main(){
     struct sockaddr_in server_addr;//本机地址
     struct sockaddr_in client_addr;//客户端地址
     size_t server_addr_len = sizeof(struct sockaddr_in);
-    size_t client_addr_len = sizeof(struct client_addr);
+    size_t client_addr_len = sizeof(struct sockaddr_in);
 
     udpsock = socket(AF_INET, SOCK_DGRAM, 0);
     if(udpsock < 0){
@@ -157,10 +166,9 @@ int main(){
         perror("local UDP recvfrom出错\n");
         exit(-1);
     }
-    printf("you got a message (%s) from %s\n", recemsg, inet_ntoa(client_addr.sin_addr));
 
     struct Translate request;
-    bzero(request, sizeof(struct Translate));
+    bzero(&request, sizeof(struct Translate));
     int r_len = 0;
     //Header部分定长为24字节,跳过即可
     //request[12]开始是query name 的第一个数字
@@ -170,14 +178,14 @@ int main(){
     request.qtype = ntohs(*(unsigned short *)sendtoBufferPointer);
     sendtoBufferPointer += 2;
     r_len += 2;
-    if(cacheSearch("E:\\Desktop\\demo.txt\n", request) < 0){
+    if(cacheSearch("E:\\Desktop\\demo.txt\n", &request) < 0){
         memcpy(sendtoBufferPointer, &request, r_len);
         sendto(udpsock, sendtoBuffer, strlen(sendtoBuffer), 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
         if(sendto < 0){
             perror("local UDP sendto 出错\n");
             exit(-1);
         }
-        close(udpsock);
+        // close(udpsock);
     }
 
     //TCP
@@ -214,19 +222,14 @@ int main(){
 
     memcpy(sendBufferPointer, &request, r_len);
 
-    //交换数据
-    whiel(1){
-        //传输信息
-        if(send(tcpsock, sendtoBuffer, strlen(sendtoBuffer), 0) < 0){
-            perror("local TCP send 出错\n");
-            exit(-1);
-        }
-
-        if(recv(tcpsock, recvBuffer, sizeof(recvBuffer), 0) < 0){
-            perror("local TCP recv 出错\n");
-            exit(-1);
-        }
+     //传输信息
+    if(send(tcpsock, sendBuffer, strlen(sendBuffer), 0) < 0){
+        perror("local TCP send 出错\n");
+        exit(-1);
     }
 
-
+    if(recv(tcpsock, recvBuffer, sizeof(recvBuffer), 0) < 0){
+        perror("local TCP recv 出错\n");
+        exit(-1);
+    }
 }

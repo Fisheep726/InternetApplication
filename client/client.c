@@ -8,13 +8,12 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <time.h>
-
-#define LOCAL_SERVER_PORT 53
-#define LOCAL_SERVER_IP   "127.0.0.2"
+#include <ip_port.h>
 
 #define TYPE_A        0X01
 #define TYPE_CNMAE    0X05
 #define TYPE_MX       0x0f
+
 
 
 //DNS header 和 question 部分结构体实现
