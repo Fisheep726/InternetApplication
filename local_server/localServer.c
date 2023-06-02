@@ -8,14 +8,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <time.h>
+#include <ip_port.h>
 
-#define CLIENT_PORT 53;
-#define CLIENT_IP "127.0.0.1";
-#define LOCAL_SERVER_PORT 53;
-#define LOCAL_SERVER_IP "127.0.0.2";
-#define LOCAL_SERVER_PORT_TEMP 8080;
-#define ROOT_SERVER_PORT 53;
-#define ROOT_SERVER_IP "127.0.0.3";
+
 #define BACKLOG 10;//最大同时请求连接数
 #define AMOUNT 1500;
 #define BufferSize 512;
@@ -121,15 +116,15 @@ static void DNS_Parse_Name(unsigned char *sendtoBufferPointer, char *out, int *l
 int main(){
     //UDP
     //server端套接字文件描述符
-    int sockfd;
+    int udpsock;
     struct sockaddr_in server_addr;//本机地址
     struct sockaddr_in client_addr;//客户端地址
     size_t server_addr_len = sizeof(struct sockaddr_in);
     size_t client_addr_len = sizeof(struct client_addr);
 
-    
-    if(sockfd = socket(AF_INET, SOCK_DGRAM, 0) < 0){
-        perror("UDP socket创建出错\n");
+    udpsock = socket(AF_INET, SOCK_DGRAM, 0);
+    if(udpsock < 0){
+        perror("local UDP socket创建出错\n");
         exit(1);
     }
     
@@ -151,15 +146,15 @@ int main(){
 
     //对于bind， accept之类的函数， 里面的套接字参数都是需要强制转化成（struct sockaddr *)
     //绑定服务器IP端口
-    if(bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0){
-        perror("UDP bind出错\n");
+    if(bind(udpsock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0){
+        perror("local UDP bind出错\n");
         exit(-1);
     }
     printf("Server started. Waiting for data...\n");
 
     //接收request
-    if(recvfrom(sockfd, recvfromBuffer, sizeof(recvfromBuffer), 0, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len) == -1){
-        perror("UDP recvfrom出错\n");
+    if(recvfrom(udpsock, recvfromBuffer, sizeof(recvfromBuffer), 0, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len) == -1){
+        perror("local UDP recvfrom出错\n");
         exit(-1);
     }
     printf("you got a message (%s) from %s\n", recemsg, inet_ntoa(client_addr.sin_addr));
@@ -177,49 +172,61 @@ int main(){
     r_len += 2;
     if(cacheSearch("E:\\Desktop\\demo.txt\n", request) < 0){
         memcpy(sendtoBufferPointer, &request, r_len);
-        sendto(sockfd, sendtoBuffer, strlen(sendtoBuffer), 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
+        sendto(udpsock, sendtoBuffer, strlen(sendtoBuffer), 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
         if(sendto < 0){
-            perror("UDP sendto 出错\n");
+            perror("local UDP sendto 出错\n");
             exit(-1);
         }
-        close(sockfd);
+        close(udpsock);
     }
 
     //TCP
-    int localfd;
-    struct sockaddr_in root_server_addr;
+    int tcpsock;
+    struct sockaddr_in root_server_addr, local_server_addr;
+    char recvBuffer[BufferSize];
+    char sendBuffer[BufferSize];
+    char *sendBufferPointer = sendBuffer;
 
-    localfd = socket(AF_INET, SOCK_STREAM, 0);
-    if(localfd < 0){
-        perror("TCP socket创建出错");
-        exit(-1);
-    }
+    bzero(&local_server_addr, sizeof(local_server_addr));
+    local_server_addr.sin_family = AF_INET;
+    local_server_addr.sin_port = htons(LOCAL_SERVER_PORT_TEMP);
+    local_server_addr.sin_addr.s_addr = inet_addr(LOCAL_SERVER_IP);
     bzero(&root_server_addr, sizeof(root_server_addr));
     root_server_addr.sin_family = AF_INET;
     root_server_addr.sin_port = htons(ROOT_SERVER_PORT);
     root_server_addr.sin_addr.s_addr = inet_addr(ROOT_SERVER_IP);
 
-    if(connect(localfd, (struct sockaddr *)&root_server_addr, sizeof(root_server_addr)) < 0){
-        perror("TCP connect出错\n");
+    tcpsock = socket(AF_INET, SOCK_STREAM, 0);
+    if(tcpsock < 0){
+        perror("local TCP socket创建出错\n");
         exit(-1);
     }
 
-    char recvBuffer[BufferSize];
-    char sendBuffer[BufferSize];
-    char *sendBufferPointer = sendBuffer;
+    if(bind(tcpsock, (struct sockaddr *)&local_server_addr, sizeof(local_server_addr)) < 0){
+        perror("local TCP bind出错\n");
+        exit(-1);
+    }
+
+    if(connect(tcpsock, (struct sockaddr *)&root_server_addr, sizeof(root_server_addr)) < 0){
+        perror("local TCP connect出错\n");
+        exit(-1);
+    }
+
     memcpy(sendBufferPointer, &request, r_len);
 
     //交换数据
     whiel(1){
         //传输信息
-        if(send(localfd, sendtoBuffer, strlen(sendtoBuffer), 0) < 0){
-            perror("TCP send 出错\n");
+        if(send(tcpsock, sendtoBuffer, strlen(sendtoBuffer), 0) < 0){
+            perror("local TCP send 出错\n");
             exit(-1);
         }
 
-        if(recv(localfd, recvBuffer, sizeof(recvBuffer), 0) < 0){
-            perror("TCP recv 出错\n");
+        if(recv(tcpsock, recvBuffer, sizeof(recvBuffer), 0) < 0){
+            perror("local TCP recv 出错\n");
             exit(-1);
         }
     }
+
+
 }
