@@ -9,10 +9,16 @@
 #include <arpa/inet.h>
 #include <time.h>
 
+#define CLIENT_PORT 53;
+#define CLIENT_IP "127.0.0.1";
 #define LOCAL_SERVER_PORT 53;
 #define LOCAL_SERVER_IP "127.0.0.2";
+#define LOCAL_SERVER_PORT_TEMP 8080;
+#define ROOT_SERVER_PORT 53;
+#define ROOT_SERVER_IP "127.0.0.3";
 #define BACKLOG 10;//最大同时请求连接数
 #define AMOUNT 1500;
+#define BufferSize 512;
 
 struct DNS_Header{
     unsigned short id;
@@ -84,25 +90,25 @@ int cacheSearch(char *path, struct Translate *request){
     } 
 }
 
-static void DNS_Parse_Name(unsigned char *sendBufferPointer, char *out, int *len){
+static void DNS_Parse_Name(unsigned char *sendtoBufferPointer, char *out, int *len){
     int flag = 0, n = 0, alen = 0;
     //pos指向的内存用于储存解析得到的结果
     char *pos = out + (*len);//传入的 *len = 0
 
     //开始解析name的报文
     while(1){
-        flag = (int)sendBufferPointer[0];
+        flag = (int)sendtoBufferPointer[0];
         if(flag == 0){
             break;
         }
         else{
-            sendBufferPointer++;
-            memcpy(pos, sendBufferPointer, flag);
+            sendtoBufferPointer++;
+            memcpy(pos, sendtoBufferPointer, flag);
             pos += flag;
-            sendBufferPointer += flag;
+            sendtoBufferPointer += flag;
 
             *len += flag;
-            if((int)sendBufferPointer[0] != 0){
+            if((int)sendtoBufferPointer[0] != 0){
                 memcpy(pos, ".", 1);
                 pos += 1;
                 (*len) += 1;
@@ -113,6 +119,7 @@ static void DNS_Parse_Name(unsigned char *sendBufferPointer, char *out, int *len
 
 
 int main(){
+    //UDP
     //server端套接字文件描述符
     int sockfd;
     struct sockaddr_in server_addr;//本机地址
@@ -121,19 +128,18 @@ int main(){
     size_t client_addr_len = sizeof(struct client_addr);
 
     
-    if(sockfd = socket(AF_INET, SOCK_DGRAM, 0) == -1){
-        printf("socket创建出错\n");
+    if(sockfd = socket(AF_INET, SOCK_DGRAM, 0) < 0){
+        perror("UDP socket创建出错\n");
         exit(1);
     }
     
     //发送缓冲区和接收缓冲区
-    char sendbuf[512];
-    char recvbuf[512];
-    char *sendBufferPointer = sendbuf;
-    char *recvBufferPointer = recvbuf;
+    char sendtoBuffer[BufferSize];
+    char recvfromBuffer[BufferSize];
+    char *sendtoBufferPointer = sendtoBuffer;
     //初始化buffer
-    memset(sendbuf, 0, 512);
-    memset(recvbuf, 0, 512);
+    memset(sendtoBuffer, 0, BufferSize);
+    memset(recvfromBuffer, 0, BufferSize);
 
     //  <和client的UDP连接>
     //初始化server端套接字
@@ -145,42 +151,75 @@ int main(){
 
     //对于bind， accept之类的函数， 里面的套接字参数都是需要强制转化成（struct sockaddr *)
     //绑定服务器IP端口
-    if(bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1){
-        printf("bind出错\n");
+    if(bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0){
+        perror("UDP bind出错\n");
         exit(-1);
     }
     printf("Server started. Waiting for data...\n");
 
     //接收request
-    if(recvfrom(sockfd, recvbuf, sizeof(recvbuf), 0, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len) == -1){
-        printf("recvfrom出错\n");
+    if(recvfrom(sockfd, recvfromBuffer, sizeof(recvfromBuffer), 0, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len) == -1){
+        perror("UDP recvfrom出错\n");
         exit(-1);
     }
+    printf("you got a message (%s) from %s\n", recemsg, inet_ntoa(client_addr.sin_addr));
 
     struct Translate request;
     bzero(request, sizeof(struct Translate));
     int r_len = 0;
     //Header部分定长为24字节,跳过即可
     //request[12]开始是query name 的第一个数字
-    sendBufferPointer += 12;
-    DNS_Parse_Name(sendBufferPointer, request.domain, &r_len);
-    sendBufferPointer += (r_len + 2);
-    request.qtype = ntohs(*(unsigned short *)sendBufferPointer);
-    sendBufferPointer += 2;
+    sendtoBufferPointer += 12;
+    DNS_Parse_Name(sendtoBufferPointer, request.domain, &r_len);
+    sendtoBufferPointer += (r_len + 2);
+    request.qtype = ntohs(*(unsigned short *)sendtoBufferPointer);
+    sendtoBufferPointer += 2;
     r_len += 2;
-    if(cacheSearch("E:\\Desktop\\demo.txt\n", request) == 0){
-        memcpy(sendBufferPointer, &request, r_len);
-        sendto(sockfd, sendbuf, strlen(sendbuf), 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
+    if(cacheSearch("E:\\Desktop\\demo.txt\n", request) < 0){
+        memcpy(sendtoBufferPointer, &request, r_len);
+        sendto(sockfd, sendtoBuffer, strlen(sendtoBuffer), 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
+        if(sendto < 0){
+            perror("UDP sendto 出错\n");
+            exit(-1);
+        }
         close(sockfd);
     }
 
-    //  <和server的TCP连接>
-    //建立与其他server的TCP连接
-    int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    char *sendBufferPointer = sendbuf;
-    char *recvBufferPointer = recvbuf;
-    memset(sendbuf, 0, 512);
-    memset(recvbuf, 0, 512);
+    //TCP
+    int localfd;
+    struct sockaddr_in root_server_addr;
 
-    int 
+    localfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(localfd < 0){
+        perror("TCP socket创建出错");
+        exit(-1);
+    }
+    bzero(&root_server_addr, sizeof(root_server_addr));
+    root_server_addr.sin_family = AF_INET;
+    root_server_addr.sin_port = htons(ROOT_SERVER_PORT);
+    root_server_addr.sin_addr.s_addr = inet_addr(ROOT_SERVER_IP);
+
+    if(connect(localfd, (struct sockaddr *)&root_server_addr, sizeof(root_server_addr)) < 0){
+        perror("TCP connect出错\n");
+        exit(-1);
+    }
+
+    char recvBuffer[BufferSize];
+    char sendBuffer[BufferSize];
+    char *sendBufferPointer = sendBuffer;
+    memcpy(sendBufferPointer, &request, r_len);
+
+    //交换数据
+    whiel(1){
+        //传输信息
+        if(send(localfd, sendtoBuffer, strlen(sendtoBuffer), 0) < 0){
+            perror("TCP send 出错\n");
+            exit(-1);
+        }
+
+        if(recv(localfd, recvBuffer, sizeof(recvBuffer), 0) < 0){
+            perror("TCP recv 出错\n");
+            exit(-1);
+        }
+    }
 }
