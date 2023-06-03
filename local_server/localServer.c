@@ -64,7 +64,7 @@ int DNS_Create_Header(struct DNS_Header *header){
     memset(header, 0x00, sizeof(struct DNS_Header));
     srandom(time(NULL));
     header -> id = random();
-    header -> flags = htons(0x0100);//query_flag = 0x0100
+    header -> flags = htons(0x0100);
     header -> questions = htons(0x0001);
     header -> answers = htons(0);
     header -> authority = htons(0);
@@ -110,10 +110,11 @@ int DNS_Create_RR(struct DNS_RR *rr, const char *domain, int ttl,
     rr -> ttl = ttl;
     rr -> rdata = rdata;
     rr -> data_len = strlen(rdata);
+    rr -> length = strlen(domain);
     return 0;
 }
 
-int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, char *response, int rlen){
+int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, struct DNS_RR *rr, char *response, int rlen){
     if(header == NULL || query == NULL || response == NULL) return -1;
     memset(response, 0, rlen);
     memcpy(response, header, sizeof(struct DNS_Header));
@@ -124,6 +125,20 @@ int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, char
     offset += sizeof(query -> qtype);
     memcpy(response + offset, &query -> qclass, sizeof(query -> qclass));
     offset += sizeof(query -> qclass);
+    memcpy(response + offset, rr -> name, rr -> length + 1);
+    offset += rr -> length + 1;
+    memcpy(response + offset, &rr -> type, sizeof(rr -> type));
+    offset += sizeof(rr -> type);
+    memcpy(response + offset, &rr -> class, sizeof(rr -> class));
+    offset += sizeof(rr -> class);
+    memcpy(response + offset, &rr -> ttl, sizeof(rr -> ttl));
+    offset += sizeof(rr -> ttl);
+    memcpy(response + offset, &rr -> data_len, sizeof(rr -> data_len));
+    offset += sizeof(rr -> data_len);
+    // memcpy(response + offset, &rr -> pre, sizeof(rr -> pre));
+    // offset += sizeof(rr -> pre);
+    memcpy(response + offset, rr -> radata, rr -> data_len + 1);
+    offset += rr -> data_len + 1;
     return offset;//返回response数据的实际长度
 }
 
@@ -177,10 +192,11 @@ int cacheSearch(char *path, char *out, struct Translate *request){
             //生成response
             struct DNS_Header header = {0};
             DNS_Create_Header(&header);
+            header.flags = htons(0x8000);
             struct DNS_Query query = {0};
             DNS_Create_Query(&query, type, domain);
             struct DNS_RR rr = {0};
-            DNS_Create_RR(&rr, cacheDomain, atoi(cacheTTL), )
+            DNS_Create_RR(&rr, cacheDomain, atoi(cacheTTL), tempClass, tempType, cacheRdata);
             DNS_Create_Response(&header, &query, out, 512);
             return 0;
         }

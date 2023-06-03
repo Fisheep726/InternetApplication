@@ -92,6 +92,18 @@ int DNS_Create_Query(struct DNS_Query *query, const char *type, const char *host
     return 0;
 }
 
+int DNS_Create_RR(struct DNS_RR *rr, const char *domain, int ttl,
+ unsigned short class, unsigned short type, char *rdata){
+    memset(rr, 0x00, sizeof(struct DNS_RR));
+    rr -> name = domain;
+    rr -> class = class;
+    rr -> type = type;
+    rr -> ttl = ttl;
+    rr -> rdata = rdata;
+    rr -> data_len = strlen(rdata);
+    return 0;
+}
+
 int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, char *response, int rlen){
     if(header == NULL || query == NULL || response == NULL) return -1;
     memset(response, 0, rlen);
@@ -134,8 +146,6 @@ static void DNS_Parse_Name(unsigned char *spoint, char *out, int *len){
 }
 
 //判断.com .org .cn .us 并返回对应服务器IP
-
-
 //建立和local server 的TCP连接
 int main(){
     int tcpsock;
@@ -199,6 +209,15 @@ int main(){
             rootName = strtok(apart[t-1], " ");
         }
     }
+
+    //生成response
+    struct DNS_Header header = {0};
+    DNS_Create_Header(&header);
+    header.flags = htons(0x8000);
+    struct DNS_Query query = {0};
+    DNS_Create_Query(&query, type, domain);
+    struct DNS_RR rr = {0};
+    DNS_Create_RR(&rr, cacheDomain, atoi(cacheTTL), tempClass, tempType, cacheRdata);
 
     //加入判断，决定返回的IP地址
     if(strcmp(rootName, "com") == 0){
