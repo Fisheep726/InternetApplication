@@ -104,7 +104,7 @@ int DNS_Create_RR(struct DNS_RR *rr, const char *domain, int ttl,
     return 0;
 }
 
-int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, char *response, int rlen){
+int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, struct DNS_RR *rr, char *response, int rlen){
     if(header == NULL || query == NULL || response == NULL) return -1;
     memset(response, 0, rlen);
     memcpy(response, header, sizeof(struct DNS_Header));
@@ -115,6 +115,20 @@ int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, char
     offset += sizeof(query -> qtype);
     memcpy(response + offset, &query -> qclass, sizeof(query -> qclass));
     offset += sizeof(query -> qclass);
+    memcpy(response + offset, rr -> name, rr -> length + 1);
+    offset += rr -> length + 1;
+    memcpy(response + offset, &rr -> type, sizeof(rr -> type));
+    offset += sizeof(rr -> type);
+    memcpy(response + offset, &rr -> class, sizeof(rr -> class));
+    offset += sizeof(rr -> class);
+    memcpy(response + offset, &rr -> ttl, sizeof(rr -> ttl));
+    offset += sizeof(rr -> ttl);
+    memcpy(response + offset, &rr -> data_len, sizeof(rr -> data_len));
+    offset += sizeof(rr -> data_len);
+    // memcpy(response + offset, &rr -> pre, sizeof(rr -> pre));
+    // offset += sizeof(rr -> pre);
+    memcpy(response + offset, rr -> radata, rr -> data_len + 1);
+    offset += rr -> data_len + 1;
     return offset;//返回response数据的实际长度
 }
 
@@ -193,14 +207,19 @@ int main(){
     //解析顶级域名
     char *recvBufferPointer = recvBuffer;
     char name[512];
+    unsigned short qtype;
+    int d_len = 0;
+    int tempTTL = 86400;
+    unsigned short tempType = 0x01;
+    unsigned short tempClass = 0x01;
     char *apart[20]
     char *rootName;
-    int d_len = 0;
+    char *comip = "127.0.0.5";
 
     //截取domain，跳过Header
     recvBufferPointer += 12;
     DNS_Parse_Name(&name, recvBufferPointer, &d_len);
-
+    recvBufferPointer += d_len;
     apart[0] = strtok(name, ".");
     //截取顶级域名
     for(int t = 1; t<10; t++){
@@ -209,23 +228,29 @@ int main(){
             rootName = strtok(apart[t-1], " ");
         }
     }
+    qtype = ntohs(*(unsigned short *)recvBufferPointer);
+    recvBufferPointer += 2;
 
     //生成response
     struct DNS_Header header = {0};
     DNS_Create_Header(&header);
     header.flags = htons(0x8000);
     struct DNS_Query query = {0};
-    DNS_Create_Query(&query, type, domain);
+    DNS_Create_Query(&query, type, name);
+    query.qtype = qtype;
     struct DNS_RR rr = {0};
-    DNS_Create_RR(&rr, cacheDomain, atoi(cacheTTL), tempClass, tempType, cacheRdata);
 
     //加入判断，决定返回的IP地址
     if(strcmp(rootName, "com") == 0){
         //返回com的TLD服务器IP
+        DNS_Create_RR(&rr, rootName, tempTTL, tempClass, tempType, comip);
+        DNS_Create_Response(&header, &query, &sendBuffer, 512);
+
     }
 
     if(strcmp(rootName, "org" == 0){
         //返回org的TLD服务器IP
+        
     })
 
     if(strcmp(rootName, "cn") == 0){

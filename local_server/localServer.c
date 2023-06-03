@@ -234,6 +234,87 @@ static void DNS_Parse_Name(unsigned char *spoint, char *out, int *len){
     }
 }
 
+static int DNS_Parse_Response(char *response){
+    if(response == NULL){
+        printf("No response!\n");
+        return -1;
+    }
+    unsigned char *ptr = response;
+    struct DNS_Header header = {0};
+    //Header部分解析
+    header.id = ntohs(*(unsigned short *)ptr);
+    ptr += 2;//跳到flags开头
+    header.flags = ntohs(*(unsigned short *)ptr);
+    ptr += 2;//跳到questions开头
+    header.questions = ntohs(*(unsigned short *)ptr);
+    ptr += 2;//跳到answers开头
+    header.answers = ntohs(*(unsigned short *)ptr);
+    ptr += 2;//跳到authority开头
+    header.authority = ntohs(*(unsigned short *)ptr);
+    ptr += 2;//跳到additional开头
+    header.additional = ntohs(*(unsigned short *)ptr);
+    ptr += 2;//跳到Query开头
+
+    //Query部分解析
+    struct DNS_Query *query = calloc(header.questions, sizeof(struct DNS_Query));
+    for(int i = 0; i < header.questions; i++){
+        // int query[i].length = 0;
+        DNS_Parse_Name(response, ptr, query[i].name, &query[i].length);
+        printf("query name: %s\n", query[i].name);
+        ptr += (query[i].length + 2);
+
+        query[i].qtype = ntohs(*(unsigned short *)ptr);
+        printf("query type: %d\n", query[i].qtype);
+        ptr += 2;//跳到qclass开头
+        query[i].qclass = ntohs(*(unsigned short *)ptr);
+        ptr += 2;
+    }
+
+    //Answer部分解析
+    char ip[20],netip[4];
+    struct DNS_RR *rr = calloc(header.answers, sizeof(struct DNS_RR));
+    for(int i = 0; i < header.answers; i++){
+        rr[i].length = 0;
+        DNS_Parse_Name(response, ptr, rr[i].name, &rr[i].length);
+        printf("answer%d name: %s\n", i, rr[i].name);
+        ptr += 2;
+
+        rr[i].type = ntohs(*(unsigned short *)ptr);
+        printf("answer type: %d\n", rr[i].type);
+        ptr += 2;
+        rr[i].class = ntohs(*(unsigned short *)ptr);
+        ptr += 2;
+        rr[i].ttl = ntohs(*(unsigned short *)ptr);
+        ptr += 4;
+        rr[i].data_len = ntohs(*(unsigned short *)ptr);
+        ptr += 2;
+
+        rr[i].length = 0;
+
+        //判断type
+        if(rr[i].type == TYPE_CNMAE){
+            DNS_Parse_Name(response, ptr, rr[i].rdata, &rr[i].length);//length 是 rdata的长度
+            ptr += rr[i].data_len;
+            printf("%s has a cname of %s \n", rr[i].name, rr[i].rdata);
+        }
+        else if(rr[i].type == TYPE_A){
+            bzero(ip,sizeof(ip));
+            memcpy(netip, ptr, 4);
+            DNS_Parse_Name(response, ptr, rr[i].rdata, &rr[i].length);//length 是 ip的长度
+            ptr += rr[i].data_len;
+            inet_ntop(AF_INET, netip, ip, sizeof(struct sockaddr));
+            printf("%s has an address of %s \n", rr[i].name, ip);
+        }
+        else if(rr[i].type == TYPE_MX){
+            // ptr += 2;//跳过preference
+            DNS_Parse_Name(response, ptr, rr[i].rdata, &rr[i].length);
+            ptr += (rr[i].data_len - 2);
+            printf("%s has a Mail eXchange name of %s\n", rr[i].name, rr[i].rdata);
+        }
+    }
+    return 0;
+}
+
 
 int main(){
     //UDP
@@ -347,4 +428,5 @@ int main(){
         perror("local TCP recv 出错\n");
         exit(-1);
     }
+    DNS_Parse_Response(recvBufferPointer);
 }
