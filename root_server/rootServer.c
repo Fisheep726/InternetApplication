@@ -22,6 +22,90 @@
 #define BufferSize 512
 #define BACKLOG 10//最大同时请求连接数
 
+struct DNS_Header{
+    unsigned short id;
+    unsigned short flags;
+    unsigned short questions;  
+    unsigned short answers;  
+    unsigned short authority;
+    unsigned short additional;
+};
+
+struct DNS_Query{
+    int length;
+    unsigned short qtype;
+    unsigned short qclass;
+    unsigned char name[512];
+};
+
+struct DNS_RR{
+    int length;
+    unsigned char name[512];
+    unsigned short type;
+    unsigned short class;
+    unsigned int ttl;
+    unsigned short data_len;
+    unsigned short pre;
+    unsigned char rdata[512];
+};
+
+int DNS_Create_Header(struct DNS_Header *header){
+    if(header == NULL)
+        return -1;
+    memset(header, 0x00, sizeof(struct DNS_Header));
+    srandom(time(NULL));
+    header -> id = random();
+    header -> flags = htons(0x0100);//query_flag = 0x0100
+    header -> questions = htons(0x0001);
+    header -> answers = htons(0);
+    header -> authority = htons(0);
+    header -> additional = htons(0);
+    return 0;
+}
+
+int DNS_Create_Query(struct DNS_Query *query, const char *type, const char *hostname){
+    if(query == NULL || hostname == NULL)
+        return -1;
+    memset(query, 0x00, sizeof(struct DNS_Query));
+    memset(query->name,0x00,512);
+    if(query -> name ==NULL){
+        return -2;
+    }
+    query -> length = strlen(hostname) + 1;
+    unsigned short qtype;
+    if(strcmp(type,"A") == 0)query -> qtype = htons(TYPE_A);
+    if(strcmp(type,"MX") == 0)query -> qtype = htons(TYPE_MX);
+    if(strcmp(type,"CNAME") == 0)query -> qtype = htons(TYPE_CNMAE);
+    query -> qclass = htons(0x0001);
+    const char apart[2] = ".";
+    char *qname = query -> name;
+    char *hostname_dup = strdup(hostname);
+    char *token = strtok(hostname_dup, apart);
+    while(token != NULL){
+        size_t len = strlen(token);
+        *qname = len;//长度的ASCII码
+        qname++;
+        strncpy(qname, token, len +1);
+        token = strtok(NULL, apart);
+    } 
+    free(hostname_dup);
+    return 0;
+}
+
+int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, char *response, int rlen){
+    if(header == NULL || query == NULL || response == NULL) return -1;
+    memset(response, 0, rlen);
+    memcpy(response, header, sizeof(struct DNS_Header));
+    int offset = sizeof(struct DNS_Header);
+    memcpy(response + offset, query -> name, query -> length + 1);
+    offset += query -> length + 1;
+    memcpy(response + offset, &query -> qtype, sizeof(query -> qtype));
+    offset += sizeof(query -> qtype);
+    memcpy(response + offset, &query -> qclass, sizeof(query -> qclass));
+    offset += sizeof(query -> qclass);
+    return offset;//返回response数据的实际长度
+}
+
 static void DNS_Parse_Name(unsigned char *spoint, char *out, int *len){
     int flag = 0, n = 0, alen = 0;
     //pos指向的内存用于储存解析得到的结果

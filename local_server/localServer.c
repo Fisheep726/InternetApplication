@@ -35,19 +35,100 @@ struct DNS_Header{
     unsigned short additional;
 };
 
+struct DNS_Query{
+    int length;
+    unsigned short qtype;
+    unsigned short qclass;
+    unsigned char name[512];
+};
+
+struct DNS_RR{
+    int length;
+    unsigned char name[512];
+    unsigned short type;
+    unsigned short class;
+    unsigned int ttl;
+    unsigned short data_len;
+    unsigned short pre;
+    unsigned char rdata[512];
+};
+
 struct Translate{
     char domain[206];
     unsigned short qtype;
 };
 
-//当authority的数量为0表示结束
-int isEnd(struct DNS_Header *header){
-    if(header -> authority != 0) return 0;
-    return 1;
+int DNS_Create_Header(struct DNS_Header *header){
+    if(header == NULL)
+        return -1;
+    memset(header, 0x00, sizeof(struct DNS_Header));
+    srandom(time(NULL));
+    header -> id = random();
+    header -> flags = htons(0x0100);//query_flag = 0x0100
+    header -> questions = htons(0x0001);
+    header -> answers = htons(0);
+    header -> authority = htons(0);
+    header -> additional = htons(0);
+    return 0;
+}
+
+int DNS_Create_Query(struct DNS_Query *query, const char *type, const char *hostname){
+    if(query == NULL || hostname == NULL)
+        return -1;
+    memset(query, 0x00, sizeof(struct DNS_Query));
+    memset(query->name,0x00,512);
+    if(query -> name ==NULL){
+        return -2;
+    }
+    query -> length = strlen(hostname) + 1;
+    unsigned short qtype;
+    if(strcmp(type,"A") == 0)query -> qtype = htons(TYPE_A);
+    if(strcmp(type,"MX") == 0)query -> qtype = htons(TYPE_MX);
+    if(strcmp(type,"CNAME") == 0)query -> qtype = htons(TYPE_CNMAE);
+    query -> qclass = htons(0x0001);
+    const char apart[2] = ".";
+    char *qname = query -> name;
+    char *hostname_dup = strdup(hostname);
+    char *token = strtok(hostname_dup, apart);
+    while(token != NULL){
+        size_t len = strlen(token);
+        *qname = len;//长度的ASCII码
+        qname++;
+        strncpy(qname, token, len +1);
+        token = strtok(NULL, apart);
+    } 
+    free(hostname_dup);
+    return 0;
+}
+
+int DNS_Create_RR(struct DNS_RR *rr, const char *domain, int ttl,
+ unsigned short class, unsigned short type, char *rdata){
+    memset(rr, 0x00, sizeof(struct DNS_RR));
+    rr -> name = domain;
+    rr -> class = class;
+    rr -> type = type;
+    rr -> ttl = ttl;
+    rr -> rdata = rdata;
+    rr -> data_len = strlen(rdata);
+    return 0;
+}
+
+int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, char *response, int rlen){
+    if(header == NULL || query == NULL || response == NULL) return -1;
+    memset(response, 0, rlen);
+    memcpy(response, header, sizeof(struct DNS_Header));
+    int offset = sizeof(struct DNS_Header);
+    memcpy(response + offset, query -> name, query -> length + 1);
+    offset += query -> length + 1;
+    memcpy(response + offset, &query -> qtype, sizeof(query -> qtype));
+    offset += sizeof(query -> qtype);
+    memcpy(response + offset, &query -> qclass, sizeof(query -> qclass));
+    offset += sizeof(query -> qclass);
+    return offset;//返回response数据的实际长度
 }
 
 //加载本地txt文件
-int cacheSearch(char *path, struct Translate *request){
+int cacheSearch(char *path, char *out, struct Translate *request){
     int i = 0, j = 0;
     int num = 0;
     char *temp[AMOUNT];//char型指针1500数组
@@ -79,12 +160,28 @@ int cacheSearch(char *path, struct Translate *request){
 
     //把temp[i]切割成 IP 和 domain
     for(j < i; j++;){
-        char *cacheDomain = strtok(temp[j],",");
-        char *cacheType = strtok(NULL, ",");
-        //如果域名匹对成功，就将对应的type读入
-        if(strcmp(cacheDomain, request -> domain) == 0){
-            if(strcmp(cacheType, type) == 0)
+        char *cacheDomain = strtok(temp[j], " ");
+        char *cacheTTL = strtok(NULL, " ");
+        char *cacheClass = strtok(NULL, " ");
+        char *cacheType = strtok(NULL, " ");
+        char *cacheRdata = strtok(NULL, " ");
+        //如果Domain和Type匹对成功，返回Rdata
+        if(strcmp(cacheDomain, request -> domain) == 0 || strcmp(cacheType, type) == 0){
             printf("same request exsit in cache\n");
+            unsigned short tempClass;
+            if(strcmp(cacheClass, "IN") == 0){tempClass = 0x01;}
+            unsigned short tempType;
+            if(strcmp(cacheType, "A") == 0){tempType = 0x01;}
+            if(strcmp(cacheType, "MX") == 0){tempType = 0x0f;}
+            if(strcmp(cacheType, "CNAME") == 0){tempType = 0x05;}
+            //生成response
+            struct DNS_Header header = {0};
+            DNS_Create_Header(&header);
+            struct DNS_Query query = {0};
+            DNS_Create_Query(&query, type, domain);
+            struct DNS_RR rr = {0};
+            DNS_Create_RR(&rr, cacheDomain, atoi(cacheTTL), )
+            DNS_Create_Response(&header, &query, out, 512);
             return 0;
         }
         else{
@@ -179,8 +276,8 @@ int main(){
     request.qtype = ntohs(*(unsigned short *)recvfromBufferPointer);
     recvfromBufferPointer += 2;
     r_len += 2;
-    if(cacheSearch("E:\\Desktop\\demo.txt\n", &request) < 0){
-        memcpy(sendtoBufferPointer, &request, r_len);
+    if(cacheSearch("E:\\Desktop\\demo.txt\n",sendtoBufferPointer, &request) == 0){
+        //cache中存在,返回response
         sendto(udpsock, sendtoBuffer, strlen(sendtoBuffer), 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
         if(sendto < 0){
             perror("local UDP sendto 出错\n");

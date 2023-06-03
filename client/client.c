@@ -47,6 +47,7 @@ struct DNS_RR{
     unsigned short class;
     unsigned int ttl;
     unsigned short data_len;
+    unsigned short pre;
     unsigned char rdata[512];
 };
 
