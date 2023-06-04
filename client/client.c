@@ -8,7 +8,16 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <time.h>
-#include <ip_port.h>
+// #include <ip_port.h>
+#define CLIENT_PORT 53
+#define CLIENT_IP "127.0.0.1"
+#define LOCAL_SERVER_PORT 53
+#define LOCAL_SERVER_IP "127.0.0.2"
+#define ROOT_SERVER_PORT 53
+#define LOCAL_SERVER_PORT_TEMP 8080
+#define ROOT_SERVER_IP "127.0.0.3"
+#define TLD_SERVER_PORT 53
+#define TLD_SERVER_IP "127.0.0.4"
 
 #define TYPE_A        0X01
 #define TYPE_CNMAE    0X05
@@ -297,9 +306,8 @@ int DNS_Client_Commit(const char *type, const char *domain){
     bzero(&servaddr, sizeof(servaddr));//将结构体数组清空
     servaddr.sin_family = AF_INET;//将服务器地址的协议族设置为AF_INET,AF_INET表示使用IPv4协议，初始化服务器地址结构体
     servaddr.sin_port = htons(LOCAL_SERVER_PORT);
-    //点分十进制地址转为网络所用的二进制数 替换inter_pton
-    //servaddr.sin_add.s_addr = inet_addr(DNS_SEVER_IP);
-    inet_pton(AF_INET, LOCAL_SERVER_IP, &servaddr.sin_addr.s_addr);
+    servaddr.sin_addr.s_addr = inet_addr(LOCAL_SERVER_IP);
+    // inet_pton(AF_INET, LOCAL_SERVER_IP, &servaddr.sin_addr.s_addr);
 
     //UDP不一定要connect，只是这样提高成功发送请求的可能性
     connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr));

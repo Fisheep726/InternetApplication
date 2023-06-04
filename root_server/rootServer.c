@@ -18,6 +18,9 @@
 #define ROOT_SERVER_IP "127.0.0.3"
 #define TLD_SERVER_PORT 53
 #define TLD_SERVER_IP "127.0.0.4"
+#define TYPE_A        0X01
+#define TYPE_CNMAE    0X05
+#define TYPE_MX       0x0f
 
 #define BufferSize 512
 #define BACKLOG 10//最大同时请求连接数
@@ -155,7 +158,7 @@ int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, stru
     offset += sizeof(rr -> data_len);
     // memcpy(response + offset, &rr -> pre, sizeof(rr -> pre));
     // offset += sizeof(rr -> pre);
-    memcpy(response + offset, rr -> radata, rr -> data_len + 1);
+    memcpy(response + offset, rr -> rdata, rr -> data_len + 1);
     offset += rr -> data_len + 1;
     return offset;//返回response数据的实际长度
 }
@@ -211,7 +214,7 @@ int main(){
         exit(-1);
     }
 
-    if(bind(tcpsock, (struct sockaddr *)&root_server_addr), sizeof(root_server_addr) < 0){
+    if(bind(tcpsock, (struct sockaddr *)&root_server_addr, sizeof(root_server_addr)) < 0){
         perror("root TCP bind出错\n");
         exit(-1);
     }
@@ -233,14 +236,14 @@ int main(){
     }
 
     //解析顶级域名
-    char *recvBufferPointer = recvBuffer;
+    unsigned char *recvBufferPointer = recvBuffer;
     char name[512];
     unsigned short qtype;
     int d_len = 0;
     int tempTTL = 86400;
     unsigned short tempType = 0x01;
     unsigned short tempClass = 0x01;
-    char *apart[20]
+    char *apart[20];
     char *rootName;
     char *comip = "127.0.0.5";
 
@@ -272,14 +275,14 @@ int main(){
     if(strcmp(rootName, "com") == 0){
         //返回com的TLD服务器IP
         DNS_Create_RR(&rr, rootName, tempTTL, tempClass, tempType, comip);
-        DNS_Create_Response(&header, &query, &sendBuffer, 512);
+        DNS_Create_Response(&header, &query, &rr, &sendBuffer, 512);
 
     }
 
-    if(strcmp(rootName, "org" == 0){
+    if(strcmp(rootName, "org") == 0){
         //返回org的TLD服务器IP
         
-    })
+    }
 
     if(strcmp(rootName, "cn") == 0){
         //返回cn的TLD服务器IP
