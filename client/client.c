@@ -249,7 +249,8 @@ static int DNS_Parse_Response(char *response){
         rr[i].length = 0;
         DNS_Parse_Name(response, ptr, rr[i].name, &rr[i].length);
         printf("answer%d name: %s\n", i, rr[i].name);
-        ptr += 2;
+        printf("rr.length is : %d\n", rr[i].length);
+        ptr += (rr[i].length + 2);
 
         rr[i].type = ntohs(*(unsigned short *)ptr);
         printf("answer type: %d\n", rr[i].type);

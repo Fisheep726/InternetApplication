@@ -122,9 +122,9 @@ unsigned short class, unsigned short type,const char *rdata){
     rr -> length = strlen(domain) + 1;
     rr -> class = htons(class);
     rr -> type = htons(type);
+    printf("rr type is : %hd\n", ntohs(rr -> type));
     rr -> ttl = htonl(ttl);
-    int data_len = strlen(rdata) + 2;
-    rr -> data_len = htons(data_len);
+
 
     const char apart[2] = ".";
     char *nameptr = rr -> name;
@@ -139,31 +139,38 @@ unsigned short class, unsigned short type,const char *rdata){
         apartDomain = strtok(NULL, apart);
     }
 
-    char *rdataptr = rr -> rdata;
-    char *rdata_dup = strdup(rdata);
-    char *apartRdata = strtok(rdata_dup, apart); 
-    while(apartRdata != NULL){
+    if(type == 0x0005 || type == 0x000f){
+        char *rdataptr = rr -> rdata;
+        char *rdata_dup = strdup(rdata);
+        char *apartRdata = strtok(rdata_dup, apart); 
+        while(apartRdata != NULL){
         size_t len = strlen(apartRdata);
         *rdataptr = len;
         rdataptr++;
         strncpy(rdataptr, apartRdata, len + 1);
         rdataptr += len;
         apartRdata = strtok(NULL, apart);
+        int data_len = strlen(rdata) + 2;
+        rr -> data_len = htons(data_len);
     }
-   
+    }
+
+   if(type == 0x0001){
+        char *rdata_dup = strdup(rdata);
+        // char *rdataptr = rr -> rdata;
+        char hex[3];
+        char *apartRdata = strtok(rdata_dup, apart);
+        while(apartRdata != NULL){
+        int num = atoi(apartRdata);
+        sprintf(hex, "%02X", num);
+        strcat(rr -> rdata,hex);
+        apartRdata = strtok(NULL, apart);
+    }
+        rr -> data_len = strlen(rr -> rdata) + 2;
+   }
 
 
-    // char *rdata_dup = strdup(rdata);
-    // // char *rdataptr = rr -> rdata;
-    // char hex[3];
-    // char *apartRdata = strtok(rdata_dup, apart);
-    // while(apartRdata != NULL){
-    //     int num = atoi(apartRdata);
-    //     sprintf(hex, "%02X", num);
-    //     strcat(rr -> rdata,hex);
-    //     apartRdata = strtok(NULL, apart);
-    // }
-    // rr -> data_len = strlen(rr -> rdata) + 1;
+
     return 0;
 }
 
@@ -231,7 +238,7 @@ int cacheSearch(char *path, char *out, struct Translate *request){
     if(i == AMOUNT - 1) printf("The DNS record memory is full.\n");
 
     //把temp[i]切割成 IP 和 domain
-    while(j < i){
+    while(j <= i){
         char *cacheDomain = strtok(temp[j], " ");
         char *cacheTTL = strtok(NULL, " ");
         char *cacheClass = strtok(NULL, " ");
@@ -260,11 +267,8 @@ int cacheSearch(char *path, char *out, struct Translate *request){
             int rlen = DNS_Create_Response(&header, &query, &rr, out, 512);
             return rlen;
         }
-        else{
-            printf("this is a new request\n");
-            return -1;
-        }
-    } 
+    }
+    if(j == i){printf("this is a new request\n");}
 }
 
 static void DNS_Parse_Name(unsigned char *spoint, char *out, int *len){
