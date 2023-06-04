@@ -93,14 +93,42 @@ int DNS_Create_Query(struct DNS_Query *query, const char *type, const char *host
 }
 
 int DNS_Create_RR(struct DNS_RR *rr, const char *domain, int ttl,
- unsigned short class, unsigned short type, char *rdata){
+unsigned short class, unsigned short type,const char *rdata){
     memset(rr, 0x00, sizeof(struct DNS_RR));
-    rr -> name = domain;
-    rr -> class = class;
-    rr -> type = type;
-    rr -> ttl = ttl;
-    rr -> rdata = rdata;
-    rr -> data_len = strlen(rdata);
+    memset(rr -> name, 0x00, 512);
+    if(rr -> name == NULL){
+        return -2;
+    }
+    rr -> length = strlen(domain) + 1;
+    rr -> class = htons(class);
+    rr -> type = htons(type);
+    rr -> ttl = htonl(ttl);
+    rr -> data_len = strlen(rdata) + 1;
+
+    const char apart[2] = ".";
+    char *nameptr = rr -> name;
+    char *domain_dup = strdup(domain);
+    char *apartDomain = strtok(domain_dup, apart); 
+    while(apartDomain != NULL){
+        size_t len = strlen(apartDomain);
+        *nameptr = len;
+        nameptr++;
+        strncpy(nameptr, apartDomain, len + 1);
+        nameptr += len;
+        apartDomain = strtok(NULL, apart);
+    }
+
+    char *rdata_dup = strdup(rdata);
+    // char *rdataptr = rr -> rdata;
+    char hex[3];
+    char *apartRdata = strtok(rdata_dup, apart);
+    while(apartRdata != NULL){
+        int num = atoi(apartRdata);
+        sprintf(hex, "%02X", num);
+        strcat(rr -> rdata,hex);
+        apartRdata = strtok(NULL, apart);
+    }
+    printf("root response rdata : %s", rr -> rdata);
     return 0;
 }
 
@@ -236,8 +264,8 @@ int main(){
     DNS_Create_Header(&header);
     header.flags = htons(0x8000);
     struct DNS_Query query = {0};
-    DNS_Create_Query(&query, type, name);
-    query.qtype = qtype;
+    DNS_Create_Query(&query, 0, name);
+    query.qtype = htons(qtype);
     struct DNS_RR rr = {0};
 
     //加入判断，决定返回的IP地址
