@@ -123,7 +123,7 @@ unsigned short class, unsigned short type,const char *rdata){
     rr -> class = htons(class);
     rr -> type = htons(type);
     rr -> ttl = htonl(ttl);
-    int data_len = strlen(rdata);
+    int data_len = strlen(rdata) + 2;
     rr -> data_len = htons(data_len);
 
     const char apart[2] = ".";
@@ -257,7 +257,7 @@ int cacheSearch(char *path, char *out, struct Translate *request){
             DNS_Create_Query(&query, cacheType, request -> domain);
             struct DNS_RR rr = {0};
             DNS_Create_RR(&rr, cacheDomain, atoi(cacheTTL), tempClass, tempType, cacheRdata);
-            int rlen = DNS_Create_Response(&header, &query, &rr, out, 512) + 46;
+            int rlen = DNS_Create_Response(&header, &query, &rr, out, 512);
             return rlen;
         }
         else{
