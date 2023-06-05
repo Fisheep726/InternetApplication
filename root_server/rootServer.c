@@ -34,6 +34,16 @@ struct DNS_Header{
     unsigned short additional;
 };
 
+struct TCP_Header{
+    unsigned short length;
+    unsigned short id;
+    unsigned short flags;
+    unsigned short questions;  
+    unsigned short answers;  
+    unsigned short authority;
+    unsigned short additional;
+};
+
 struct DNS_Query{
     int length;
     unsigned short qtype;
@@ -67,6 +77,21 @@ int DNS_Create_Header(struct DNS_Header *header){
     header -> questions = htons(0x01);
     header -> answers = htons(0);
     header -> authority = htons(0x01);
+    header -> additional = htons(0);
+    return 0;
+}
+
+int TCP_Create_Header(struct TCP_Header *header){
+    if(header == NULL)
+        return -1;
+    memset(header, 0x00, sizeof(struct DNS_Header));
+    srandom(time(NULL));
+    header -> length = htons(0);
+    header -> id = random();
+    header -> flags = htons(0x0100);
+    header -> questions = htons(0x01);
+    header -> answers = htons(0);
+    header -> authority = htons(0);
     header -> additional = htons(0);
     return 0;
 }
@@ -155,14 +180,16 @@ unsigned short class, unsigned short type,const char *rdata){
     int datalen = strlen(rr -> rdata);
     rr -> data_len = htons(4);
     int lenlen = sizeof(rr -> data_len);
+   
     return 0;
 }
 
-int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, struct DNS_RR *rr, char *response, int rlen){
+
+int DNS_Create_Response(struct TCP_Header *header, struct DNS_Query *query, struct DNS_RR *rr, char *response, int rlen){
     if(header == NULL || query == NULL || response == NULL) return -1;
     memset(response, 0, rlen);
-    memcpy(response, header, sizeof(struct DNS_Header));
-    int offset = sizeof(struct DNS_Header);
+    memcpy(response, header, sizeof(struct TCP_Header));
+    int offset = sizeof(struct TCP_Header);
     memcpy(response + offset, query -> name, query -> length + 1);
     offset += query -> length + 1;
     memcpy(response + offset, &query -> qtype, sizeof(query -> qtype));
@@ -180,11 +207,8 @@ int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, stru
     offset += sizeof(rr -> ttl);
     memcpy(response + offset, &rr -> data_len, sizeof(rr -> data_len));
     offset += sizeof(rr -> data_len);
-    // memcpy(response + offset, &rr -> pre, sizeof(rr -> pre));
-    // offset += sizeof(rr -> pre);
-    char *data = (char *)malloc(sizeof(char) *9);
-    memcpy(data, rr -> rdata, strlen(rr -> rdata));
-    printf("data : %s\n", data);
+    memcpy(response + offset, &rr -> pre, sizeof(rr -> pre));
+    offset += sizeof(rr -> pre);
     memcpy(response + offset, rr -> rdata, strlen(rr -> rdata));
     offset += ntohs(rr -> data_len);
     
@@ -224,7 +248,6 @@ int main(){
     int tcpsock;
     struct sockaddr_in root_server_addr, local_server_addr;
     char recvBuffer[BufferSize];
-    char tempBuffer[BufferSize];
     char sendBuffer[BufferSize];
     int lsa_len = sizeof(local_server_addr);
 
@@ -271,21 +294,16 @@ int main(){
         exit(-1);
     }
 
-    int recvlen = strlen(recvBuffer);
-    printf("recvlen : %d\n", recvlen);
     //解析request,获得顶级域名
     printf("root start parse request\n");
     unsigned char *recvBufferPointer = recvBuffer;
-    char name[512];
     unsigned short qtype;
     int d_len = 0;
     int tempTTL = 86400;
     unsigned short tempType = 0x01;
     unsigned short tempClass = 0x01;
     char *apart[20];
-    char *rootName;
     char *comip = "127.0.0.5";
-    char *cacheType = "MX";
 
     //截取domain，跳过Header
     struct Translate request;
@@ -300,32 +318,49 @@ int main(){
     recvBufferPointer += 2;
     r_len += 2;
     printf("parse request is ok\n");
-    printf("recvbuffer[0] : %hd\n", ntohs(recvBuffer[0]));
-    printf("rootname: %s\n",request.domain);
-    printf("qtype: %hd\n",request.qtype);
+    printf("domain : %s\n", request.domain);
+    printf("qtype : %hd\n",request.qtype);
+
+    //开始截取顶级域
+    char *domain_dup = strdup(request.domain);
+    char *nextName = strtok(domain_dup, ".");
+    char *rootName;
+    while(nextName != NULL){
+        rootName = nextName;
+        nextName = strtok(NULL, ".");
+    }
+    printf("rootName : %s\n",rootName);
 
 
 
     printf("start to response\n");
     //生成response
-    struct DNS_Header header = {0};
-    DNS_Create_Header(&header);
+    char tempBuffer[BufferSize];
+    char *tempBufferPointer = tempBuffer;
+    struct TCP_Header header = {0};
+    TCP_Create_Header(&header);
     header.flags = htons(0x8000);
+    header.authority = htons(0x0001);
     header.answers = htons(0x0001);
+    char *rtype;
+    if(request.qtype == 0x01){rtype = "A";}
+    if(request.qtype == 0x05){rtype = "CNAME";}
+    if(request.qtype == 0x0f){rtype = "MX";}
     struct DNS_Query query = {0};
-    DNS_Create_Query(&query, cacheType, request.domain);
+    DNS_Create_Query(&query, rtype, request.domain);
+    printf("query name : %s\n", query.name);
     struct DNS_RR rr = {0};
-    // DNS_Create_RR(&rr, cacheDomain, atoi(cacheTTL), tempClass, tempType, cacheRdata);
-    // int rlen = DNS_Create_Response(&header, &query, &rr, out, 512);
-
-
+    int rrlen = 0;
 
     //加入判断，决定返回的IP地址
     if(strcmp(rootName, "com") == 0){
         //返回com的TLD服务器IP
         DNS_Create_RR(&rr, rootName, tempTTL, tempClass, tempType, comip);
-        int rrlen = DNS_Create_Response(&header, &query, &rr, &tempBuffer, 512);
-
+        int tcplen = 20 + strlen(request.domain) + strlen(rootName) + 2 + 16;
+        printf("root tcplen : %d\n", tcplen);
+        header.length = htons(tcplen);
+        rrlen = DNS_Create_Response(&header, &query, &rr, tempBufferPointer, 512);
+        printf("rrlen : %d\n", rrlen);
     }
 
     if(strcmp(rootName, "org") == 0){
@@ -341,7 +376,7 @@ int main(){
         //返回us的TLD服务器IP
     }
 
-    if(send(consock, sendBuffer, strlen(sendBuffer), 0) < 0){
+    if(send(consock, tempBuffer, rrlen + 2, 0) < 0){
         perror("local TCP send 出错\n");
         exit(-1);
     }
