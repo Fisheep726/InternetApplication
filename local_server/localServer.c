@@ -408,7 +408,8 @@ static int TCP_Parse_Response(char *response){
             rr[i].length = 0;
             DNS_Parse_Name(ptr, rr[i].name, &rr[i].length);
             printf("answer%d name: %s\n", i, rr[i].name);
-            ptr += 2;
+            printf("rrlength : %d\n", rr[i].length);
+            ptr += rr[i].length + 2;
 
             rr[i].type = ntohs(*(unsigned short *)ptr);
             printf("answer type: %d\n", rr[i].type);
@@ -575,7 +576,7 @@ int main(){
 
     bzero(&local_server_addr, sizeof(local_server_addr));
     local_server_addr.sin_family = AF_INET;
-    local_server_addr.sin_port = htons(LOCAL_SERVER_PORT_TEMP);
+    local_server_addr.sin_port = htons(LOCAL_SERVER_PORT);
     local_server_addr.sin_addr.s_addr = inet_addr(LOCAL_SERVER_IP);
     bzero(&root_server_addr, sizeof(root_server_addr));
     root_server_addr.sin_family = AF_INET;
