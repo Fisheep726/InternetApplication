@@ -152,23 +152,28 @@ unsigned short class, unsigned short type,const char *rdata){
         apartRdata = strtok(NULL, apart);
         int data_len = strlen(rdata) + 2;
         rr -> data_len = htons(data_len);
-    }
+        }
     }
 
-   if(type == 0x0001){
+    if(type == 0x0001){
+        char *rdataptr = rr -> rdata;
         char *rdata_dup = strdup(rdata);
-        // char *rdataptr = rr -> rdata;
-        char hex[3];
-        char *apartRdata = strtok(rdata_dup, apart);
+        char *apartRdata = strtok(rdata_dup, apart); 
         while(apartRdata != NULL){
         int num = atoi(apartRdata);
-        sprintf(hex, "%02X", num);
-        strcat(rr -> rdata,hex);
+        char *hex = (char *)malloc(sizeof(char) *9);
+        sprintf(hex, "%02x", num);
+        strncpy(rdataptr, hex, 2);
+        rdataptr += 2;
         apartRdata = strtok(NULL, apart);
+        }
+        uint32_t host_num = strtoul(rr -> rdata, NULL, 16);
+        uint32_t net_num = htonl(host_num);
+        memcpy(rr -> rdata, &net_num, sizeof(net_num));
+        int datalen = strlen(rr -> rdata);
+        rr -> data_len = htons(4);
+        int lenlen = sizeof(rr -> data_len);
     }
-        rr -> data_len = strlen(rr -> rdata) + 2;
-   }
-
 
 
     return 0;
@@ -185,7 +190,6 @@ int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, stru
     offset += sizeof(query -> qtype);
     memcpy(response + offset, &query -> qclass, sizeof(query -> qclass));
     offset += sizeof(query -> qclass);
-    printf("header + query = %d\n", offset);
     //上面是request构造
     memcpy(response + offset, rr -> name, rr -> length + 1);
     offset += rr -> length + 1;
@@ -197,10 +201,12 @@ int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, stru
     offset += sizeof(rr -> ttl);
     memcpy(response + offset, &rr -> data_len, sizeof(rr -> data_len));
     offset += sizeof(rr -> data_len);
-    printf("length before + data_len : %d\n",offset);
     // memcpy(response + offset, &rr -> pre, sizeof(rr -> pre));
     // offset += sizeof(rr -> pre);
-    memcpy(response + offset, rr -> rdata, rr -> data_len + 1);
+    char *data = (char *)malloc(sizeof(char) *9);
+    memcpy(data, rr -> rdata, strlen(rr -> rdata));
+    printf("data : %s\n", data);
+    memcpy(response + offset, rr -> rdata, strlen(rr -> rdata));
     offset += ntohs(rr -> data_len);
     
     return offset;//返回response数据的实际长度
@@ -452,6 +458,7 @@ int main(){
             exit(-1);
         }
         // close(udpsock);
+        return 0;
     }
     printf("Start to build TCP\n");
     //TCP
