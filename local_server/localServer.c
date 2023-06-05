@@ -356,7 +356,7 @@ static void DNS_Parse_Name(unsigned char *spoint, char *out, int *len){
     }
 }
 
-static int TCP_Parse_Response(char *response){
+static int TCP_Parse_Response(char *response, char *nextptr){
     if(response == NULL){
         printf("No response!\n");
         return -1;
@@ -436,6 +436,7 @@ static int TCP_Parse_Response(char *response){
                 ptr += rr[i].data_len;
                 inet_ntop(AF_INET, netip, ip, sizeof(struct sockaddr));
                 printf("%s has an address of %s \n", rr[i].name, ip);
+                memcpy(nextptr, ip , sizeof(ip));
             }
             else if(rr[i].type == TYPE_MX){
                 // ptr += 2;//跳过preference
@@ -478,6 +479,7 @@ static int TCP_Parse_Response(char *response){
                 ptr += rr[i].data_len;
                 inet_ntop(AF_INET, netip, ip, sizeof(struct sockaddr));
                 printf("%s has an address of %s \n", rr[i].name, ip);
+                memcpy(nextptr, ip , sizeof(ip));
             }
             else if(rr[i].type == TYPE_MX){
                 // ptr += 2;//跳过preference
@@ -487,7 +489,9 @@ static int TCP_Parse_Response(char *response){
             }
         }
     }
-
+    if(header.authority > 0){
+        return 1;
+    }
     return 0;
 }
 
@@ -627,6 +631,13 @@ int main(){
         perror("local TCP recv 出错\n");
         exit(-1);
     }
-    TCP_Parse_Response(recvBuffer);
+    char nextip[20];
+    char *nextptr = nextip;
+    int next = TCP_Parse_Response(recvBuffer,nextptr);
+
+    //去往顶级域
+    if(next > 0){
+        printf("nextip : %s\n", nextip);
+    }
     return 0;
 }
