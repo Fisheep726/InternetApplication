@@ -35,6 +35,16 @@ struct DNS_Header{
     unsigned short additional;
 };
 
+struct TCP_Header{
+    unsigned short length;
+    unsigned short id;
+    unsigned short flags;
+    unsigned short questions;  
+    unsigned short answers;  
+    unsigned short authority;
+    unsigned short additional;
+};
+
 struct DNS_Query{
     int length;
     unsigned short qtype;
@@ -63,6 +73,21 @@ int DNS_Create_Header(struct DNS_Header *header){
         return -1;
     memset(header, 0x00, sizeof(struct DNS_Header));
     srandom(time(NULL));
+    header -> id = random();
+    header -> flags = htons(0x0100);
+    header -> questions = htons(0x01);
+    header -> answers = htons(0);
+    header -> authority = htons(0);
+    header -> additional = htons(0);
+    return 0;
+}
+
+int TCP_Create_Header(struct TCP_Header *header){
+    if(header == NULL)
+        return -1;
+    memset(header, 0x00, sizeof(struct DNS_Header));
+    srandom(time(NULL));
+    header -> length = htons(0);
     header -> id = random();
     header -> flags = htons(0x0100);
     header -> questions = htons(0x01);
@@ -212,6 +237,29 @@ int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, stru
     return offset;//返回response数据的实际长度
 }
 
+int TCP_Create_Requestion(struct TCP_Header *header, struct DNS_Query *query, char *request, int rlen){
+    if(header == NULL || query == NULL || request == NULL)
+        return -1;
+
+    memset(request, 0, rlen);//初始化request
+
+    //header.request
+    memcpy(request, header, sizeof(struct TCP_Header));
+    int offset = sizeof(struct TCP_Header);
+
+    //query.request
+    memcpy(request + offset, query -> name, query -> length + 1);
+    offset += query -> length + 1;
+
+    memcpy(request + offset, &query -> qtype, sizeof(query -> qtype));
+    offset += sizeof(query -> qtype);
+
+    memcpy(request + offset, &query -> qclass, sizeof(query -> qclass));
+    offset += sizeof(query -> qclass);
+
+    return offset;//返回request数据的实际长度
+}
+
 //检索本地txt文件
 int cacheSearch(char *path, char *out, struct Translate *request){
     int i = 0, j = 0;
@@ -242,9 +290,10 @@ int cacheSearch(char *path, char *out, struct Translate *request){
         i++;
     } 
     if(i == AMOUNT - 1) printf("The DNS record memory is full.\n");
+    printf("first reader is ok\n");
 
     //把temp[i]切割成 IP 和 domain
-    while(j <= i){
+    while(j < i){
         char *cacheDomain = strtok(temp[j], " ");
         char *cacheTTL = strtok(NULL, " ");
         char *cacheClass = strtok(NULL, " ");
@@ -256,10 +305,11 @@ int cacheSearch(char *path, char *out, struct Translate *request){
         if(strcmp(cacheType, "A") == 0){tempType = 0x0001;}
         if(strcmp(cacheType, "MX") == 0){tempType = 0x000f;}
         if(strcmp(cacheType, "CNAME") == 0){tempType = 0x0005;}
-        j++;
+        printf("second read is ok\n");
+        
         //到这没问题
         //如果Domain和Type匹对成功，创建response
-        if(strcmp(cacheDomain, request -> domain) == 0 || tempType == request -> qtype){
+        if(strcmp(cacheDomain, request -> domain) == 0 && tempType == request -> qtype){
             printf("same request exsit in cache\n");
             //生成response
             struct DNS_Header header = {0};
@@ -273,8 +323,10 @@ int cacheSearch(char *path, char *out, struct Translate *request){
             int rlen = DNS_Create_Response(&header, &query, &rr, out, 512);
             return rlen;
         }
+        else{j++;}
     }
-    if(j == i){printf("this is a new request\n");}
+    printf("this is a new request\n");
+    return -1;
 }
 
 static void DNS_Parse_Name(unsigned char *spoint, char *out, int *len){
@@ -444,11 +496,12 @@ int main(){
     recvfromBufferPointer += (r_len + 2);
     request.qtype = ntohs(*(unsigned short *)recvfromBufferPointer);
     recvfromBufferPointer += 2;
-    r_len += 2;
+    r_len += 16;
+    printf("parse request is ok\n");
+   
 
 
     int rrlen = cacheSearch("//home//fisheep//demo.txt",sendtoBufferPointer, &request);
-    printf("responselen : %d\n", rrlen);
     if(rrlen > 0){
         //cache中存在,返回response
         printf("cacheSerch successful!\n");
@@ -494,10 +547,24 @@ int main(){
     }
 
     //给sendBuffer赋值
-    memcpy(sendBufferPointer, recvfromBufferPointer, BufferSize);
+    //创建tcp request
+    struct TCP_Header header = {0};
+    TCP_Create_Header(&header);
+    header.flags = htons(0x8000);
+    char *rtype;
+    if(request.qtype == 0x01){rtype = "A";}
+    if(request.qtype == 0x05){rtype = "CNAME";}
+    if(request.qtype == 0x0f){rtype = "MX";}
+    struct DNS_Query query = {0};
+    DNS_Create_Query(&query, rtype, request.domain);
+    char TCPrequest[512];
+    int tcplen = 20 + strlen(request.domain) + 1;
+    header.length = htons(tcplen);
+    int totallen = 0;
+    totallen = TCP_Create_Requestion(&header, &query, &TCPrequest, tcplen);
 
      //传输信息
-    if(send(tcpsock, sendBuffer, strlen(sendBuffer), 0) < 0){
+    if(send(tcpsock, &TCPrequest, totallen + 2, 0) < 0){
         perror("local TCP send 出错\n");
         exit(-1);
     }
@@ -507,4 +574,5 @@ int main(){
         exit(-1);
     }
     DNS_Parse_Response(recvBuffer);
+    return 0;
 }
