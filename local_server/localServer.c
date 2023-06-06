@@ -740,7 +740,77 @@ int main(){
     //去往二级域
     if(next > 0){
         printf("nextip : %s\n", nextip);
-        close(tcpsock);
+        close(tcpsock1);
+    }
+
+    //建立和二级域的TCP
+    int tcpsock2;
+    struct sockaddr_in sec_server_addr, local_server_addr2;
+    char sendBuffer2[BufferSize];
+    char recvBuffer2[BufferSize];
+    char *sendBuffer2Pointer = sendBuffer2;
+    char *recvBuffer2Pointer = recvBuffer2;
+
+    bzero(&local_server_addr2, sizeof(local_server_addr2));
+    local_server_addr2.sin_family = AF_INET;
+    local_server_addr2.sin_port = htons(LOCAL_SERVER_PORT);
+    local_server_addr2.sin_addr.s_addr = inet_addr(LOCAL_SERVER_IP);
+    bzero(&sec_server_addr, sizeof(sec_server_addr));
+    sec_server_addr.sin_family = AF_INET;
+    sec_server_addr.sin_port = htons(TLD_SERVER_PORT);
+    sec_server_addr.sin_addr.s_addr = inet_addr(nextip);
+
+    tcpsock2 = socket(AF_INET, SOCK_STREAM, 0);
+    if(tcpsock2 < 0){
+        perror("local TCP2 socket创建出错\n");
+        exit(-1);
+    }
+
+    if(setsockopt(tcpsock2, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0){
+        perror("root TCP2 setsockopt ADDR出错\n ");
+        exit(-1);
+    }
+
+    if(setsockopt(tcpsock2, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on)) < 0){
+        perror("root TCP2 setsockopt PORT出错\n ");
+        exit(-1);
+    }
+
+
+    if(bind(tcpsock2, (struct sockaddr *)&local_server_addr2, sizeof(local_server_addr2)) < 0){
+        perror("local TCP2 bind出错\n");
+        exit(-1);
+    }
+
+    if(connect(tcpsock2, (struct sockaddr *)&sec_server_addr, sizeof(sec_server_addr)) < 0){
+        perror("local TCP2 connect出错\n");
+        exit(-1);
+    }
+
+    //直接传输TCPrequest
+    if(send(tcpsock2, &TCPrequest, totallen + 2, 0) < 0){
+        perror("local TCP2 send 出错\n");
+        exit(-1);
+    }
+
+    if(recv(tcpsock1, recvBuffer2, sizeof(recvBuffer2), 0) < 0){
+        perror("local TCP2 recv 出错\n");
+        exit(-1);
+    }
+
+    next = TCP_Parse_Response(recvBuffer2, nextptr);
+    if(next == 0){
+        int recvlen = ntohs(*(unsigned short *)recvBuffer2Pointer);
+        printf("recvlen : %d\n",recvlen);
+        recvBuffer2Pointer += 2;
+        memcpy(sendtoBufferPointer,recvBuffer2Pointer,510);
+        printf("copy successful\n");
+        sendto(udpsock, sendtoBuffer, recvlen, 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
+        if(sendto < 0){
+            perror("local UDP sendto 出错\n");
+            exit(-1);
+        }
+        close(udpsock);
     }
 
     return 0;

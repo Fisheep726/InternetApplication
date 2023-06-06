@@ -314,7 +314,10 @@ int main(){
     unsigned short tempType = 0x0001;
     unsigned short tempClass = 0x0001;
     char *apart[20];
+    char *cnip = "127.0.0.4";
+    char *usip = "127.0.0.5";
     char *comip = "127.0.0.6";
+    char *orgip = "127.0.0.7";
 
     //截取domain，跳过Header
     struct Translate request;
@@ -376,15 +379,33 @@ int main(){
 
     if(strcmp(rootName, "org") == 0){
         //返回org的TLD服务器IP
+        DNS_Create_RR(&rr, rootName, tempTTL, tempClass, tempType, orgip);
+        tcplen = 20 + strlen(request.domain) + strlen(rootName) + 2 + 16;
+        printf("root tcplen : %d\n", tcplen);
+        header.length = htons(tcplen);
+        rrlen = DNS_Create_Response(&header, &query, &rr, tempBufferPointer, 512);
+        printf("rrlen : %d\n", rrlen);
         
     }
 
     if(strcmp(rootName, "cn") == 0){
         //返回cn的TLD服务器IP
+        DNS_Create_RR(&rr, rootName, tempTTL, tempClass, tempType, cnip);
+        tcplen = 20 + strlen(request.domain) + strlen(rootName) + 2 + 16;
+        printf("root tcplen : %d\n", tcplen);
+        header.length = htons(tcplen);
+        rrlen = DNS_Create_Response(&header, &query, &rr, tempBufferPointer, 512);
+        printf("rrlen : %d\n", rrlen);
     }
 
     if(strcmp(rootName, "us") == 0){
         //返回us的TLD服务器IP
+        DNS_Create_RR(&rr, rootName, tempTTL, tempClass, tempType, usip);
+        tcplen = 20 + strlen(request.domain) + strlen(rootName) + 2 + 16;
+        printf("root tcplen : %d\n", tcplen);
+        header.length = htons(tcplen);
+        rrlen = DNS_Create_Response(&header, &query, &rr, tempBufferPointer, 512);
+        printf("rrlen : %d\n", rrlen);
     }
 
     if(send(consock, tempBuffer, tcplen + 2, 0) < 0){

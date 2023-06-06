@@ -371,7 +371,7 @@ int main(){
     bzero(&tld_server_addr, sizeof(tld_server_addr));
     tld_server_addr.sin_family = AF_INET;
     tld_server_addr.sin_port = htons(TLD_SERVER_PORT);
-    tld_server_addr.sin_addr.s_addr = inet_addr("127.0.0.6");
+    tld_server_addr.sin_addr.s_addr = inet_addr("127.0.0.8");
     bzero(&local_server_addr, sizeof(local_server_addr));
     local_server_addr.sin_family = AF_INET;
     local_server_addr.sin_port = htons(LOCAL_SERVER_PORT);
@@ -437,26 +437,9 @@ int main(){
     printf("domain : %s\n", request.domain);
     printf("qtype : %hd\n",request.qtype);
 
-    // char *domain_dup = strdup(request.domain);
-    // char *nextName = strtok(domain_dup, ".");
-    // char *tldName;
-    // char *t = tldName;
-    // while(strcmp(nextName, "com") != 0){
-    //     tldName = nextName;
-    //     nextName = strtok(NULL, ".");
-    // }
-    // strcat(tldName,".com");
-    // printf("tldName : %s\n",tldName);
-    // struct Translate tldrequest = {0};
-    // strcat(tldrequest.domain, tldName);
-    // tldrequest.qtype = request.qtype;
-    // printf("tldrequest domain : %s\n", tldrequest.domain);
-    // int domainlen = strlen(tldrequest.domain);
-    // printf("tldrequest qtype : %hd\n", tldrequest.qtype);
-
-    //com为一步到位
+    //educn为一步到位
     //开始检索
-    int tcplen = cacheSearch("//home//fisheep//servers//com.txt", sendBufferPointer, &request);
+    int tcplen = cacheSearch("//home//fisheep//servers//educn.txt", sendBufferPointer, &request);
     if(tcplen > 0){
         printf("cacheSerch successful!\n");
         if(send(consock, sendBuffer, tcplen + 2, 0) < 0){

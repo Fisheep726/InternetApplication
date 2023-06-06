@@ -1,0 +1,1 @@
+test.mx.edu.cn  86400  IN  MX  edu.mail.com
