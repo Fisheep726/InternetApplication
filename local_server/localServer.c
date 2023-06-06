@@ -18,7 +18,7 @@
 #define LOCAL_SERVER_PORT_TEMP 8080
 #define ROOT_SERVER_IP "127.0.0.3"
 #define TLD_SERVER_PORT 53
-// #define TLD_SERVER_IP "127.0.0.5"
+// #define TLD_SERVER_IP "127.0.0.6"
 
 #define AMOUNT 1500
 #define BufferSize 512
@@ -164,7 +164,24 @@ unsigned short class, unsigned short type,const char *rdata){
         apartDomain = strtok(NULL, apart);
     }
 
-    if(type == 0x0005 || type == 0x000f){
+    if(type == 0x000f){
+        rr -> pre = htons(0x0005);
+        char *rdataptr = rr -> rdata;
+        char *rdata_dup = strdup(rdata);
+        char *apartRdata = strtok(rdata_dup, apart); 
+        while(apartRdata != NULL){
+        size_t len = strlen(apartRdata);
+        *rdataptr = len;
+        rdataptr++;
+        strncpy(rdataptr, apartRdata, len + 1);
+        rdataptr += len;
+        apartRdata = strtok(NULL, apart);
+        int data_len = strlen(rdata) + 4;
+        rr -> data_len = htons(data_len);
+        }
+    }
+
+    if(type == 0x0005){
         char *rdataptr = rr -> rdata;
         char *rdata_dup = strdup(rdata);
         char *apartRdata = strtok(rdata_dup, apart); 
@@ -705,17 +722,26 @@ int main(){
         exit(-1);
     }
 
-    TCP_Parse_Response(recvBuffer1, NULL);
-    int recvlen = ntohs(*(unsigned short *)recvBuffer1Pointer);
-    printf("recvlen : %d\n",recvlen);
-    recvBuffer1Pointer += 2;
-    memcpy(sendtoBufferPointer,recvBuffer1Pointer,510);
-    printf("copy successful\n");
-    sendto(udpsock, sendtoBuffer, recvlen, 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
+    next = TCP_Parse_Response(recvBuffer1, nextptr);
+    if(next == 0){
+        int recvlen = ntohs(*(unsigned short *)recvBuffer1Pointer);
+        printf("recvlen : %d\n",recvlen);
+        recvBuffer1Pointer += 2;
+        memcpy(sendtoBufferPointer,recvBuffer1Pointer,510);
+        printf("copy successful\n");
+        sendto(udpsock, sendtoBuffer, recvlen, 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
         if(sendto < 0){
             perror("local UDP sendto 出错\n");
             exit(-1);
         }
-    close(udpsock);
+        close(udpsock);
+    }
+
+    //去往二级域
+    if(next > 0){
+        printf("nextip : %s\n", nextip);
+        close(tcpsock);
+    }
+
     return 0;
 }

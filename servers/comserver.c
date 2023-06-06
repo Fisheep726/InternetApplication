@@ -17,7 +17,7 @@
 #define LOCAL_SERVER_PORT_TEMP 8080
 #define ROOT_SERVER_IP "127.0.0.3"
 #define TLD_SERVER_PORT 53
-#define TLD_SERVER_IP "127.0.0.5"
+#define TLD_SERVER_IP "127.0.0.6"
 #define TYPE_A        0X01
 #define TYPE_CNMAE    0X05
 #define TYPE_MX       0x0f
@@ -177,7 +177,7 @@ unsigned short class, unsigned short type,const char *rdata){
         strncpy(rdataptr, apartRdata, len + 1);
         rdataptr += len;
         apartRdata = strtok(NULL, apart);
-        int data_len = strlen(rdata) + 2;
+        int data_len = strlen(rdata) + 4;
         rr -> data_len = htons(data_len);
         }
     }
@@ -249,7 +249,7 @@ int DNS_Create_Response(struct TCP_Header *header, struct DNS_Query *query, stru
         offset += sizeof(rr -> pre);
     }
     memcpy(response + offset, rr -> rdata, strlen(rr -> rdata));
-    offset += ntohs(rr -> data_len);
+    offset += sizeof(rr -> rdata);
     return offset;//返回response数据的实际长度
 }
 
@@ -340,14 +340,17 @@ int cacheSearch(char *path, char *out, struct Translate *request){
             char *rtype;
             if(request -> qtype == 0x01){rtype = "A";}
             if(request -> qtype == 0x05){rtype = "CNAME";}
-            if(request -> qtype == 0x0f){rtype = "MX"; header.additional = htons(0x0001);}
+            if(request -> qtype == 0x0f){rtype = "MX";}//header.additional = htons(0x0001);
             struct DNS_Query query = {0};
             DNS_Create_Query(&query, cacheType, request -> domain);
             struct DNS_RR rr = {0};
             DNS_Create_RR(&rr, cacheDomain, atoi(cacheTTL), tempClass, tempType, cacheRdata);
             int tcplen = 18 + strlen(request -> domain) + 2 + strlen(cacheDomain) + 2 + strlen(cacheRdata) + 2 + 10; 
             header.length = htons(tcplen);
-            if(request -> qtype == 0x0f){tcplen += 2;}
+            if(request -> qtype == 0x0f){
+                tcplen += 2;
+
+            }
             int rlen = DNS_Create_Response(&header, &query, &rr, out, 512);
             return tcplen;
         }
@@ -368,7 +371,7 @@ int main(){
     bzero(&tld_server_addr, sizeof(tld_server_addr));
     tld_server_addr.sin_family = AF_INET;
     tld_server_addr.sin_port = htons(TLD_SERVER_PORT);
-    tld_server_addr.sin_addr.s_addr = inet_addr("127.0.0.5");
+    tld_server_addr.sin_addr.s_addr = inet_addr("127.0.0.6");
     bzero(&local_server_addr, sizeof(local_server_addr));
     local_server_addr.sin_family = AF_INET;
     local_server_addr.sin_port = htons(LOCAL_SERVER_PORT_TEMP);

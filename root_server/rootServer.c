@@ -314,7 +314,7 @@ int main(){
     unsigned short tempType = 0x0001;
     unsigned short tempClass = 0x0001;
     char *apart[20];
-    char *comip = "127.0.0.5";
+    char *comip = "127.0.0.6";
 
     //截取domain，跳过Header
     struct Translate request;
