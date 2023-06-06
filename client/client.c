@@ -279,7 +279,7 @@ static int DNS_Parse_Response(char *response){
             printf("%s has an address of %s \n", rr[i].name, ip);
         }
         else if(rr[i].type == TYPE_MX){
-            // ptr += 2;//跳过preference
+            ptr += 2;//跳过preference
             DNS_Parse_Name(response, ptr, rr[i].rdata, &rr[i].length);
             ptr += (rr[i].data_len - 2);
             printf("%s has a Mail eXchange name of %s\n", rr[i].name, rr[i].rdata);

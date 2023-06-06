@@ -656,6 +656,7 @@ int main(){
     char sendBuffer1[BufferSize];
     char recvBuffer1[BufferSize];
     char *sendBuffer1Pointer = sendBuffer1;
+    char *recvBuffer1Pointer = recvBuffer1;
 
     bzero(&local_server_addr1, sizeof(local_server_addr1));
     local_server_addr1.sin_family = AF_INET;
@@ -705,5 +706,16 @@ int main(){
     }
 
     TCP_Parse_Response(recvBuffer1, NULL);
+    int recvlen = ntohs(*(unsigned short *)recvBuffer1Pointer);
+    printf("recvlen : %d\n",recvlen);
+    recvBuffer1Pointer += 2;
+    memcpy(sendtoBufferPointer,recvBuffer1Pointer,510);
+    printf("copy successful\n");
+    sendto(udpsock, sendtoBuffer, recvlen, 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
+        if(sendto < 0){
+            perror("local UDP sendto 出错\n");
+            exit(-1);
+        }
+    close(udpsock);
     return 0;
 }

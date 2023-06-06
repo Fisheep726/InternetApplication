@@ -59,7 +59,7 @@ struct DNS_RR{
     unsigned short class;
     unsigned int ttl;
     unsigned short data_len;
-    // unsigned short pre;
+    unsigned short pre;
     unsigned char rdata[512];
 };
 
@@ -165,7 +165,24 @@ unsigned short class, unsigned short type,const char *rdata){
         apartDomain = strtok(NULL, apart);
     }
 
-    if(type == 0x0005 || type == 0x000f){
+    if(type == 0x000f){
+        rr -> pre = htons(0x0005);
+        char *rdataptr = rr -> rdata;
+        char *rdata_dup = strdup(rdata);
+        char *apartRdata = strtok(rdata_dup, apart); 
+        while(apartRdata != NULL){
+        size_t len = strlen(apartRdata);
+        *rdataptr = len;
+        rdataptr++;
+        strncpy(rdataptr, apartRdata, len + 1);
+        rdataptr += len;
+        apartRdata = strtok(NULL, apart);
+        int data_len = strlen(rdata) + 2;
+        rr -> data_len = htons(data_len);
+        }
+    }
+
+    if(type == 0x0005){
         char *rdataptr = rr -> rdata;
         char *rdata_dup = strdup(rdata);
         char *apartRdata = strtok(rdata_dup, apart); 
@@ -227,12 +244,10 @@ int DNS_Create_Response(struct TCP_Header *header, struct DNS_Query *query, stru
     offset += sizeof(rr -> ttl);
     memcpy(response + offset, &rr -> data_len, sizeof(rr -> data_len));
     offset += sizeof(rr -> data_len);
-    if(rr -> type == htons(0x0005)){
-        //跳过pre
-        offset += 2;
+    if(rr -> type == htons(0x000f)){
+        memcpy(response + offset, &rr -> pre, sizeof(rr -> pre));
+        offset += sizeof(rr -> pre);
     }
-    // memcpy(response + offset, &rr -> pre, sizeof(rr -> pre));
-    // offset += sizeof(rr -> pre);
     memcpy(response + offset, rr -> rdata, strlen(rr -> rdata));
     offset += ntohs(rr -> data_len);
     return offset;//返回response数据的实际长度
@@ -325,13 +340,14 @@ int cacheSearch(char *path, char *out, struct Translate *request){
             char *rtype;
             if(request -> qtype == 0x01){rtype = "A";}
             if(request -> qtype == 0x05){rtype = "CNAME";}
-            if(request -> qtype == 0x0f){rtype = "MX";}
+            if(request -> qtype == 0x0f){rtype = "MX"; header.additional = htons(0x0001);}
             struct DNS_Query query = {0};
             DNS_Create_Query(&query, cacheType, request -> domain);
             struct DNS_RR rr = {0};
             DNS_Create_RR(&rr, cacheDomain, atoi(cacheTTL), tempClass, tempType, cacheRdata);
-            int tcplen = 16 + strlen(request -> domain) + 2 + strlen(cacheDomain) + 2 + strlen(cacheRdata) + 2 + 10; 
+            int tcplen = 18 + strlen(request -> domain) + 2 + strlen(cacheDomain) + 2 + strlen(cacheRdata) + 2 + 10; 
             header.length = htons(tcplen);
+            if(request -> qtype == 0x0f){tcplen += 2;}
             int rlen = DNS_Create_Response(&header, &query, &rr, out, 512);
             return tcplen;
         }
