@@ -18,7 +18,7 @@
 #define LOCAL_SERVER_PORT_TEMP 8080
 #define ROOT_SERVER_IP "127.0.0.3"
 #define TLD_SERVER_PORT 53
-#define TLD_SERVER_IP "127.0.0.4"
+// #define TLD_SERVER_IP "127.0.0.5"
 
 #define AMOUNT 1500
 #define BufferSize 512
@@ -365,17 +365,17 @@ static int TCP_Parse_Response(char *response, char *nextptr){
     struct TCP_Header header = {0};
     //Header部分解析
     header.length = ntohs(*(unsigned short *)ptr);
-    printf("header.length : %hd\n", header.length);
+    // printf("header.length : %hd\n", header.length);
     ptr += 2;
     header.id = ntohs(*(unsigned short *)ptr);
-    printf("header.id : %hd\n", header.id);
+    // printf("header.id : %hd\n", header.id);
     ptr += 2;//跳到flags开头
     header.flags = ntohs(*(unsigned short *)ptr);
-    printf("header.flag : %hd\n", header.flags);
+    // printf("header.flag : %hd\n", header.flags);
     ptr += 2;//跳到questions开头
     header.questions = ntohs(*(unsigned short *)ptr);
     ptr += 2;//跳到answers开头
-    printf("header.questions : %hd\n", header.questions);
+    // printf("header.questions : %hd\n", header.questions);
     header.answers = ntohs(*(unsigned short *)ptr);
     ptr += 2;//跳到authority开头
     header.authority = ntohs(*(unsigned short *)ptr);
@@ -408,7 +408,6 @@ static int TCP_Parse_Response(char *response, char *nextptr){
             rr[i].length = 0;
             DNS_Parse_Name(ptr, rr[i].name, &rr[i].length);
             printf("answer%d name: %s\n", i, rr[i].name);
-            printf("rrlength : %d\n", rr[i].length);
             ptr += rr[i].length + 2;
 
             rr[i].type = ntohs(*(unsigned short *)ptr);
@@ -452,7 +451,7 @@ static int TCP_Parse_Response(char *response, char *nextptr){
             rr[i].length = 0;
             DNS_Parse_Name(ptr, rr[i].name, &rr[i].length);
             printf("answer%d name: %s\n", i, rr[i].name);
-            ptr += 2;
+            ptr += rr[i].length + 2;
 
             rr[i].type = ntohs(*(unsigned short *)ptr);
             printf("answer type: %d\n", rr[i].type);
@@ -593,6 +592,17 @@ int main(){
         exit(-1);
     }
 
+    int on = 1;
+    if(setsockopt(tcpsock, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0){
+        perror("root TCP setsockopt ADDR出错\n ");
+        exit(-1);
+    }
+
+    if(setsockopt(tcpsock, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on)) < 0){
+        perror("root TCP setsockopt PORT出错\n ");
+        exit(-1);
+    }
+
     if(bind(tcpsock, (struct sockaddr *)&local_server_addr, sizeof(local_server_addr)) < 0){
         perror("local TCP bind出错\n");
         exit(-1);
@@ -638,6 +648,62 @@ int main(){
     //去往顶级域
     if(next > 0){
         printf("nextip : %s\n", nextip);
+        close(tcpsock);
     }
+    //建立和顶级域的TCP
+    int tcpsock1;
+    struct sockaddr_in tld_server_addr, local_server_addr1;
+    char sendBuffer1[BufferSize];
+    char recvBuffer1[BufferSize];
+    char *sendBuffer1Pointer = sendBuffer1;
+
+    bzero(&local_server_addr1, sizeof(local_server_addr1));
+    local_server_addr1.sin_family = AF_INET;
+    local_server_addr1.sin_port = htons(LOCAL_SERVER_PORT);
+    local_server_addr1.sin_addr.s_addr = inet_addr(LOCAL_SERVER_IP);
+    bzero(&tld_server_addr, sizeof(tld_server_addr));
+    tld_server_addr.sin_family = AF_INET;
+    tld_server_addr.sin_port = htons(TLD_SERVER_PORT);
+    tld_server_addr.sin_addr.s_addr = inet_addr(nextip);
+
+    tcpsock1 = socket(AF_INET, SOCK_STREAM, 0);
+    if(tcpsock1 < 0){
+        perror("local TCP1 socket创建出错\n");
+        exit(-1);
+    }
+
+    if(setsockopt(tcpsock1, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0){
+        perror("root TCP setsockopt ADDR出错\n ");
+        exit(-1);
+    }
+
+    if(setsockopt(tcpsock1, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on)) < 0){
+        perror("root TCP setsockopt PORT出错\n ");
+        exit(-1);
+    }
+
+
+    if(bind(tcpsock1, (struct sockaddr *)&local_server_addr1, sizeof(local_server_addr1)) < 0){
+        perror("local TCP1 bind出错\n");
+        exit(-1);
+    }
+
+    if(connect(tcpsock1, (struct sockaddr *)&tld_server_addr, sizeof(tld_server_addr)) < 0){
+        perror("local TCP1 connect出错\n");
+        exit(-1);
+    }
+
+    //直接传输TCPrequest
+    if(send(tcpsock1, &TCPrequest, totallen + 2, 0) < 0){
+        perror("local TCP1 send 出错\n");
+        exit(-1);
+    }
+
+    if(recv(tcpsock1, recvBuffer1, sizeof(recvBuffer1), 0) < 0){
+        perror("local TCP recv 出错\n");
+        exit(-1);
+    }
+
+    TCP_Parse_Response(recvBuffer1, NULL);
     return 0;
 }
