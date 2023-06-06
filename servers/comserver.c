@@ -8,23 +8,16 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <time.h>
-// #include <ip_port.h>
-#define CLIENT_PORT 53
+#define PORT 53
 #define CLIENT_IP "127.0.0.1"
-#define LOCAL_SERVER_PORT 53
 #define LOCAL_SERVER_IP "127.0.0.2"
-#define ROOT_SERVER_PORT 53
-#define LOCAL_SERVER_PORT_TEMP 8080
 #define ROOT_SERVER_IP "127.0.0.3"
-#define TLD_SERVER_PORT 53
-#define TLD_SERVER_IP "127.0.0.6"
-#define TYPE_A        0X01
-#define TYPE_CNMAE    0X05
-#define TYPE_MX       0x0f
-
-#define BufferSize 512
-#define BACKLOG 10//最大同时请求连接数
 #define AMOUNT 1500
+#define BufferSize 512
+#define TYPE_A        0X0001
+#define TYPE_CNMAE    0X0005
+#define TYPE_MX       0x000f
+#define BACKLOG 10//最大同时请求连接数
 
 struct DNS_Header{
     unsigned short id;
@@ -370,11 +363,11 @@ int main(){
 
     bzero(&tld_server_addr, sizeof(tld_server_addr));
     tld_server_addr.sin_family = AF_INET;
-    tld_server_addr.sin_port = htons(TLD_SERVER_PORT);
+    tld_server_addr.sin_port = htons(PORT);
     tld_server_addr.sin_addr.s_addr = inet_addr("127.0.0.6");
     bzero(&local_server_addr, sizeof(local_server_addr));
     local_server_addr.sin_family = AF_INET;
-    local_server_addr.sin_port = htons(LOCAL_SERVER_PORT);
+    local_server_addr.sin_port = htons(PORT);
     local_server_addr.sin_addr.s_addr = inet_addr(LOCAL_SERVER_IP);
 
     tcpsock = socket(AF_INET, SOCK_STREAM, 0);
@@ -436,23 +429,6 @@ int main(){
     printf("parse request is ok\n");
     printf("domain : %s\n", request.domain);
     printf("qtype : %hd\n",request.qtype);
-
-    // char *domain_dup = strdup(request.domain);
-    // char *nextName = strtok(domain_dup, ".");
-    // char *tldName;
-    // char *t = tldName;
-    // while(strcmp(nextName, "com") != 0){
-    //     tldName = nextName;
-    //     nextName = strtok(NULL, ".");
-    // }
-    // strcat(tldName,".com");
-    // printf("tldName : %s\n",tldName);
-    // struct Translate tldrequest = {0};
-    // strcat(tldrequest.domain, tldName);
-    // tldrequest.qtype = request.qtype;
-    // printf("tldrequest domain : %s\n", tldrequest.domain);
-    // int domainlen = strlen(tldrequest.domain);
-    // printf("tldrequest qtype : %hd\n", tldrequest.qtype);
 
     //com为一步到位
     //开始检索

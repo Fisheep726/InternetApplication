@@ -9,17 +9,11 @@
 #include <arpa/inet.h>
 #include <time.h>
 
-// #include <ip_port.h>
-#define CLIENT_PORT 53
+//PORT AND IP
+#define PORT 53
 #define CLIENT_IP "127.0.0.1"
-#define LOCAL_SERVER_PORT 53
 #define LOCAL_SERVER_IP "127.0.0.2"
-#define ROOT_SERVER_PORT 53
-#define LOCAL_SERVER_PORT_TEMP 8080
 #define ROOT_SERVER_IP "127.0.0.3"
-#define TLD_SERVER_PORT 53
-// #define TLD_SERVER_IP "127.0.0.6"
-
 #define AMOUNT 1500
 #define BufferSize 512
 #define TYPE_A        0X0001
@@ -243,8 +237,6 @@ int DNS_Create_Response(struct DNS_Header *header, struct DNS_Query *query, stru
     offset += sizeof(rr -> ttl);
     memcpy(response + offset, &rr -> data_len, sizeof(rr -> data_len));
     offset += sizeof(rr -> data_len);
-    // memcpy(response + offset, &rr -> pre, sizeof(rr -> pre));
-    // offset += sizeof(rr -> pre);
     char *data = (char *)malloc(sizeof(char) *9);
     memcpy(data, rr -> rdata, strlen(rr -> rdata));
     printf("data : %s\n", data);
@@ -382,17 +374,13 @@ static int TCP_Parse_Response(char *response, char *nextptr){
     struct TCP_Header header = {0};
     //Header部分解析
     header.length = ntohs(*(unsigned short *)ptr);
-    // printf("header.length : %hd\n", header.length);
     ptr += 2;
     header.id = ntohs(*(unsigned short *)ptr);
-    // printf("header.id : %hd\n", header.id);
     ptr += 2;//跳到flags开头
     header.flags = ntohs(*(unsigned short *)ptr);
-    // printf("header.flag : %hd\n", header.flags);
     ptr += 2;//跳到questions开头
     header.questions = ntohs(*(unsigned short *)ptr);
     ptr += 2;//跳到answers开头
-    // printf("header.questions : %hd\n", header.questions);
     header.answers = ntohs(*(unsigned short *)ptr);
     ptr += 2;//跳到authority开头
     header.authority = ntohs(*(unsigned short *)ptr);
@@ -404,9 +392,7 @@ static int TCP_Parse_Response(char *response, char *nextptr){
     //Query部分解析
     struct DNS_Query *query = calloc(header.questions, sizeof(struct DNS_Query));
     for(int i = 0; i < header.questions; i++){
-        // int query[i].length = 0;
         DNS_Parse_Name(ptr, query[i].name, &query[i].length);
-        // if(query[i].name != 0){printf("query name: %s\n", query[i].name);}
         ptr += (query[i].length + 2);
 
         query[i].qtype = ntohs(*(unsigned short *)ptr);
@@ -532,16 +518,13 @@ int main(){
     char recvfromBuffer[BufferSize];
     char *sendtoBufferPointer = sendtoBuffer;
     unsigned char *recvfromBufferPointer = recvfromBuffer;
-    //初始化buffer
-    // memset(sendtoBuffer, 0, BufferSize);
-    // memset(recvfromBuffer, 0, BufferSize);
 
     //  <和client的UDP连接>
     //初始化server端套接字
     bzero(&server_addr,sizeof(server_addr));
     //用htons和htonl将端口和地址转成网络字节序
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(LOCAL_SERVER_PORT);
+    server_addr.sin_port = htons(PORT);
     server_addr.sin_addr.s_addr = inet_addr(LOCAL_SERVER_IP);//点分十进制地址转化为网络所用的二进制数，替换inter_pton
 
     //对于bind， accept之类的函数， 里面的套接字参数都是需要强制转化成（struct sockaddr *)
@@ -596,11 +579,11 @@ int main(){
 
     bzero(&local_server_addr, sizeof(local_server_addr));
     local_server_addr.sin_family = AF_INET;
-    local_server_addr.sin_port = htons(LOCAL_SERVER_PORT);
+    local_server_addr.sin_port = htons(PORT);
     local_server_addr.sin_addr.s_addr = inet_addr(LOCAL_SERVER_IP);
     bzero(&root_server_addr, sizeof(root_server_addr));
     root_server_addr.sin_family = AF_INET;
-    root_server_addr.sin_port = htons(ROOT_SERVER_PORT);
+    root_server_addr.sin_port = htons(PORT);
     root_server_addr.sin_addr.s_addr = inet_addr(ROOT_SERVER_IP);
 
     tcpsock = socket(AF_INET, SOCK_STREAM, 0);
@@ -677,11 +660,11 @@ int main(){
 
     bzero(&local_server_addr1, sizeof(local_server_addr1));
     local_server_addr1.sin_family = AF_INET;
-    local_server_addr1.sin_port = htons(LOCAL_SERVER_PORT);
+    local_server_addr1.sin_port = htons(PORT);
     local_server_addr1.sin_addr.s_addr = inet_addr(LOCAL_SERVER_IP);
     bzero(&tld_server_addr, sizeof(tld_server_addr));
     tld_server_addr.sin_family = AF_INET;
-    tld_server_addr.sin_port = htons(TLD_SERVER_PORT);
+    tld_server_addr.sin_port = htons(PORT);
     tld_server_addr.sin_addr.s_addr = inet_addr(nextip);
 
     tcpsock1 = socket(AF_INET, SOCK_STREAM, 0);
@@ -753,11 +736,11 @@ int main(){
 
     bzero(&local_server_addr2, sizeof(local_server_addr2));
     local_server_addr2.sin_family = AF_INET;
-    local_server_addr2.sin_port = htons(LOCAL_SERVER_PORT);
+    local_server_addr2.sin_port = htons(PORT);
     local_server_addr2.sin_addr.s_addr = inet_addr(LOCAL_SERVER_IP);
     bzero(&sec_server_addr, sizeof(sec_server_addr));
     sec_server_addr.sin_family = AF_INET;
-    sec_server_addr.sin_port = htons(TLD_SERVER_PORT);
+    sec_server_addr.sin_port = htons(PORT);
     sec_server_addr.sin_addr.s_addr = inet_addr(nextip);
 
     tcpsock2 = socket(AF_INET, SOCK_STREAM, 0);

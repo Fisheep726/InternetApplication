@@ -8,21 +8,15 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <time.h>
-// #include <ip_port.h>
-#define CLIENT_PORT 53
+#define PORT 53
 #define CLIENT_IP "127.0.0.1"
-#define LOCAL_SERVER_PORT 53
 #define LOCAL_SERVER_IP "127.0.0.2"
-#define ROOT_SERVER_PORT 53
-#define LOCAL_SERVER_PORT_TEMP 8080
 #define ROOT_SERVER_IP "127.0.0.3"
-#define TLD_SERVER_PORT 53
-#define TLD_SERVER_IP "127.0.0.4"
-#define TYPE_A        0X01
-#define TYPE_CNMAE    0X05
-#define TYPE_MX       0x0f
-
+#define AMOUNT 1500
 #define BufferSize 512
+#define TYPE_A        0X0001
+#define TYPE_CNMAE    0X0005
+#define TYPE_MX       0x000f
 #define BACKLOG 10//最大同时请求连接数
 
 struct DNS_Header{
@@ -164,33 +158,12 @@ unsigned short class, unsigned short type,const char *rdata){
         apartDomain = strtok(NULL, apart);
     }
 
-
     char *rdataptr = rr -> rdata;
     char *rdata_dup = strdup(rdata);
     printf("rdata_dup : %s\n", rdata_dup);
     struct in_addr netip = {0};
     inet_aton(rdata_dup, &netip);
     memcpy(rdataptr, (char *)&netip.s_addr, sizeof((char *)&netip.s_addr));
-    // char *apartRdata = strtok(rdata_dup, apart); 
-    // while(apartRdata != NULL){
-    // int num = atoi(apartRdata);
-    // char *hex = (char *)malloc(sizeof(char) *9);
-    // sprintf(hex, "%02x", num);
-    // strncpy(rdataptr, hex, 2);
-    // rdataptr += 2;
-    // apartRdata = strtok(NULL, apart);
-    // }
-    // printf("rr -> rdata : %s\n", rr -> rdata);
-
-    // rdataptr = rr -> rdata;
-    // for(int n = 0; n < 4; n++){
-
-    // }
-    // int host_num = strtoul(rr -> rdata, NULL, 16);
-    // int net_num = htonl(host_num);
-    // memcpy(rr -> rdata, &net_num, 4);
-
-
     rr -> data_len = htons(0x0004);
    
     return 0;
@@ -265,11 +238,11 @@ int main(){
 
     bzero(&root_server_addr, sizeof(root_server_addr));
     root_server_addr.sin_family = AF_INET;
-    root_server_addr.sin_port = htons(ROOT_SERVER_PORT);
+    root_server_addr.sin_port = htons(PORT);
     root_server_addr.sin_addr.s_addr = inet_addr(ROOT_SERVER_IP);
     bzero(&local_server_addr, sizeof(local_server_addr));
     local_server_addr.sin_family = AF_INET;
-    local_server_addr.sin_port = htons(LOCAL_SERVER_PORT_TEMP);
+    local_server_addr.sin_port = htons(PORT);
     local_server_addr.sin_addr.s_addr = inet_addr(LOCAL_SERVER_IP);
 
     tcpsock = socket(AF_INET, SOCK_STREAM, 0);
