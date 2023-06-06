@@ -17,7 +17,7 @@
 #define TYPE_A        0X0001
 #define TYPE_CNMAE    0X0005
 #define TYPE_MX       0x000f
-#define BACKLOG 10//最大同时请求连接数
+#define BACKLOG 10
 
 struct DNS_Header{
     unsigned short id;
@@ -52,7 +52,6 @@ struct DNS_RR{
     unsigned short class;
     unsigned int ttl;
     unsigned short data_len;
-    // unsigned short pre;
     unsigned char rdata[512];
 };
 
@@ -99,32 +98,25 @@ int DNS_Create_Query(struct DNS_Query *query, const char *type, const char *host
     if(query -> name ==NULL){
         return -2;
     }
-
-    query -> length = strlen(hostname) + 1;//主机名占用内存长度
-
-    //查询类型1表示获得IPv4地址  即 A
+    query -> length = strlen(hostname) + 1;
     unsigned short qtype;
     if(strcmp(type,"A") == 0)query -> qtype = htons(TYPE_A);
     if(strcmp(type,"MX") == 0)query -> qtype = htons(TYPE_MX);
     if(strcmp(type,"CNAME") == 0)query -> qtype = htons(TYPE_CNMAE);
-    //查询类1表示Internet数据
     query -> qclass = htons(0x0001);
 
-    //名字储存！！
-    //www.baidu.com -> 3www5baidu3com 
     const char apart[2] = ".";
-    char *qname = query -> name;//用于填充内容的指针
-    //strdup先开辟大小与hostname同的内存，然后将hostname的字符拷贝到开辟的内存上
-    char *hostname_dup = strdup(hostname);//复制字符串，调用malloc
-    char *token = strtok(hostname_dup, apart);//strtok为分割函数，分割标识符apart
+    char *qname = query -> name;
+    char *hostname_dup = strdup(hostname);
+    char *token = strtok(hostname_dup, apart);
 
     while(token != NULL){
         size_t len = strlen(token);
-        *qname = len;//长度的ASCII码
+        *qname = len;
         qname++;
-        strncpy(qname, token, len +1);//strcpy用于给字符数组赋值
+        strncpy(qname, token, len +1);
         qname += len;
-        token = strtok(NULL, apart);//依赖上一次的结果，线程不安全
+        token = strtok(NULL, apart);
     } 
 
     free(hostname_dup);
@@ -141,7 +133,6 @@ unsigned short class, unsigned short type,const char *rdata){
     rr -> length = strlen(domain) + 1;
     rr -> class = htons(class);
     rr -> type = htons(type);
-    printf("rr type is : %hd\n", ntohs(rr -> type));
     rr -> ttl = htonl(ttl);
 
 
@@ -161,7 +152,6 @@ unsigned short class, unsigned short type,const char *rdata){
 
     char *rdataptr = rr -> rdata;
     char *rdata_dup = strdup(rdata);
-    printf("rdata_dup : %s\n", rdata_dup);
     struct in_addr netip = {0};
     inet_aton(rdata_dup, &netip);
     memcpy(rdataptr, (char *)&netip.s_addr, sizeof((char *)&netip.s_addr));
@@ -182,7 +172,6 @@ int DNS_Create_Response(struct TCP_Header *header, struct DNS_Query *query, stru
     offset += sizeof(query -> qtype);
     memcpy(response + offset, &query -> qclass, sizeof(query -> qclass));
     offset += sizeof(query -> qclass);
-    //上面是request构造
     memcpy(response + offset, rr -> name, rr -> length + 1);
     offset += rr -> length + 1;
     memcpy(response + offset, &rr -> type, sizeof(rr -> type));
@@ -195,15 +184,13 @@ int DNS_Create_Response(struct TCP_Header *header, struct DNS_Query *query, stru
     offset += sizeof(rr -> data_len);
     memcpy(response + offset, rr -> rdata, 4);
     
-    return offset;//返回response数据的实际长度
+    return offset;
 }
 
 static void DNS_Parse_Name(unsigned char *spoint, char *out, int *len){
     int flag = 0, n = 0, alen = 0;
-    //pos指向的内存用于储存解析得到的结果
-    char *pos = out + (*len);//传入的 *len = 0
+    char *pos = out + (*len);
 
-    //开始解析name的报文
     while(1){
         flag = (int)spoint[0];
         if(flag == 0){
@@ -225,19 +212,17 @@ static void DNS_Parse_Name(unsigned char *spoint, char *out, int *len){
     }
 }
 
-//判断.edu.cn并返回对应服务器IP
-//建立和local server 的TCP连接
 int main(){
     int tcpsock;
-    struct sockaddr_in root_server_addr, local_server_addr;
+    struct sockaddr_in cn_server_addr, local_server_addr;
     char recvBuffer[BufferSize];
     char sendBuffer[BufferSize];
     int lsa_len = sizeof(local_server_addr);
 
-    bzero(&root_server_addr, sizeof(root_server_addr));
-    root_server_addr.sin_family = AF_INET;
-    root_server_addr.sin_port = htons(PORT);
-    root_server_addr.sin_addr.s_addr = inet_addr("127.0.0.4");
+    bzero(&cn_server_addr, sizeof(cn_server_addr));
+    cn_server_addr.sin_family = AF_INET;
+    cn_server_addr.sin_port = htons(PORT);
+    cn_server_addr.sin_addr.s_addr = inet_addr("127.0.0.4");
     bzero(&local_server_addr, sizeof(local_server_addr));
     local_server_addr.sin_family = AF_INET;
     local_server_addr.sin_port = htons(PORT);
@@ -245,40 +230,38 @@ int main(){
 
     tcpsock = socket(AF_INET, SOCK_STREAM, 0);
     if(tcpsock < 0){
-        perror("root TCP socket创建出错\n");
+        perror("cnserver TCP socket创建出错\n");
         exit(-1);
     }
 
     int on = 1;
     if(setsockopt(tcpsock, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0){
-        perror("root TCP setsockopt出错\n ");
+        perror("cnserver TCP setsockopt出错\n ");
         exit(-1);
     }
 
-    if(bind(tcpsock, (struct sockaddr *)&root_server_addr, sizeof(root_server_addr)) < 0){
-        perror("root TCP bind出错\n");
+    if(bind(tcpsock, (struct sockaddr *)&cn_server_addr, sizeof(cn_server_addr)) < 0){
+        perror("cnserver TCP bind出错\n");
         exit(-1);
     }
 
     if(listen(tcpsock, BACKLOG) < 0){
-        perror("root TCP listen出错\n");
+        perror("cnserver TCP listen出错\n");
         exit(-1);
     }
-    printf("root server is listening...\n");
+    printf("cnserver server is listening...\n");
 
     int consock;
     if((consock = accept(tcpsock, (struct sockaddr *)&local_server_addr, &lsa_len)) < 0){
-        perror("root TCP accept出错\n");
+        perror("cnserver TCP accept出错\n");
         exit(-1);
     }
 
     if(recv(consock, recvBuffer, sizeof(recvBuffer), 0) < 0){
-        perror("root TCP recv 出错\n");
+        perror("cnserver TCP recv 出错\n");
         exit(-1);
     }
 
-    //解析request,获得根域名
-    printf("root start parse request\n");
     unsigned char *recvBufferPointer = recvBuffer;
     unsigned short qtype;
     int tempTTL = 86400;
@@ -292,23 +275,18 @@ int main(){
     char *educnip = "127.0.0.8";
     char *govusip = "127.0.0.9";
 
-    //截取domain，跳过Header
     struct Translate request;
     bzero(&request, sizeof(struct Translate));
     int r_len = 0;
-    //Header部分定长为12字节,跳过即可 tcp多了个length
-    //request[14]开始是query name 的第一个数字
     recvBufferPointer += 14;
     DNS_Parse_Name(recvBufferPointer, request.domain, &r_len);
     recvBufferPointer += (r_len + 2);
     request.qtype = ntohs(*(unsigned short *)recvBufferPointer);
     recvBufferPointer += 2;
     r_len += 2;
-    printf("parse request is ok\n");
-    printf("domain : %s\n", request.domain);
-    printf("qtype : %hd\n",request.qtype);
+    printf("request domain : %s\n", request.domain);
+    printf("request qtype : %hd\n",request.qtype);
 
-    //开始截取顶级域
     char *domain_dup = strdup(request.domain);
     char *nextName = strtok(domain_dup, ".");
     char *tldName;
@@ -318,7 +296,6 @@ int main(){
         nextName = strtok(NULL, ".");
     }
     strcat(tldName,".cn");
-    printf("tldName : %s\n",tldName);
     struct Translate tldrequest = {0};
     strcat(tldrequest.domain, tldName);
     tldrequest.qtype = request.qtype;
@@ -326,10 +303,6 @@ int main(){
     int domainlen = strlen(tldrequest.domain);
     printf("tldrequest qtype : %hd\n", tldrequest.qtype);
 
-
-
-    printf("start to response\n");
-    //生成response
     char tempBuffer[BufferSize];
     char *tempBufferPointer = tempBuffer;
     struct TCP_Header header = {0};
@@ -343,23 +316,19 @@ int main(){
     if(request.qtype == 0x0f){rtype = "MX";}
     struct DNS_Query query = {0};
     DNS_Create_Query(&query, rtype, request.domain);
-    printf("query name : %s\n", query.name);
     struct DNS_RR rr = {0};
     int tcplen, rrlen = 0;
 
-    //加入判断，决定返回的IP地址
     if(strcmp(tldName, "edu.cn") == 0){
-        //返回com的TLD服务器IP
         DNS_Create_RR(&rr, tldName, tempTTL, tempClass, tempType, educnip);
         tcplen = 20 + strlen(request.domain) + strlen(tldName) + 2 + 16;
-        printf("root tcplen : %d\n", tcplen);
+        printf("cn tcplen : %d\n", tcplen);
         header.length = htons(tcplen);
         rrlen = DNS_Create_Response(&header, &query, &rr, tempBufferPointer, 512);
-        printf("rrlen : %d\n", rrlen);
     }
 
     if(send(consock, tempBuffer, tcplen + 2, 0) < 0){
-        perror("local TCP send 出错\n");
+        perror("cn TCP send 出错\n");
         exit(-1);
     }
 }
